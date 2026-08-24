@@ -5,12 +5,17 @@ import { seed } from '@/lib/trion/seed'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-/** POST — (re)seed the Akashic Index if empty. */
+/** POST — (re)seed the Akashic Index if empty (incl. signal history backfill). */
 export async function POST() {
   try {
     const count = await db.behavioralHash.count()
     if (count > 0) {
-      return NextResponse.json({ alreadySeeded: true, behavioralHashes: count })
+      // Backfill signal history if missing (idempotent)
+      const signalCount = await db.signal.count()
+      if (signalCount === 0) {
+        await seed()
+      }
+      return NextResponse.json({ alreadySeeded: true, behavioralHashes: count, signals: await db.signal.count() })
     }
     await seed()
     const [entities, hashes, chains, validators] = await Promise.all([

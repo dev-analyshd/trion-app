@@ -157,7 +157,13 @@ export async function seed() {
       })
     }
     const existingHashes = await db.behavioralHash.count({ where: { entityId: entity.id } })
-    if (existingHashes > 0) continue
+    const existingSignals = await db.signal.count({ where: { entityId: entity.id } })
+    if (existingHashes > 0 && existingSignals > 0) continue
+    if (existingHashes > 0) {
+      // hashes exist but signal history missing — seed only signals
+      await seedSignalHistory(entity.id, e, now)
+      continue
+    }
 
     const r = rng(parseInt(beoId.slice(0, 8), 16))
     const types = Object.keys(e.eventWeights) as EventType[]
@@ -205,10 +211,96 @@ export async function seed() {
         })),
       })
     }
-    console.log(`  ✅ ${e.label}: ${e.bhCount} behavioral hashes`)
+
+    // Seed historical signal publications (24h of C(t) trajectory per entity)
+    // — realistic: healthy entities mostly emit, manipulated ones SILENCE
+    const signalRows: Parameters<typeof db.signal.createMany>[0]['data'] = []
+    const points = 18 // ~one publication every 80 minutes
+    for (let i = points; i >= 1; i--) {
+      const ts = new Date(now - i * 80 * 60 * 1000)
+      const vol = clamp01(0.2 + 0.35 * Math.abs(Math.sin(i * 1.7 + e.depth)))
+      const theta = 0.55 + 0.37 * vol
+      // coherence drifts around the hint with mild noise
+      const coherence = clamp01(e.coherenceHint + (r() - 0.5) * 0.12)
+      const passes = coherence >= theta
+      const status = !passes ? 'SILENCE'
+        : coherence - theta < 0.10 ? 'WARN' : 'NOMINAL'
+      const moat = Math.log1p(0.25 * e.depth / 10_000)
+      signalRows.push({
+        entityId: entity.id,
+        type: passes ? 'VALUATION' : 'SILENCE',
+        status,
+        coherence,
+        threshold: theta,
+        margin: coherence - theta,
+        tValue: passes ? coherence * Math.exp(moat) : 0,
+        moat,
+        planes: JSON.stringify({
+          physical: clamp01(coherence - 0.08 + r() * 0.06),
+          mental: clamp01(coherence - 0.05 + r() * 0.05),
+          spiritual: clamp01(coherence + 0.02 * r()),
+          conscious: clamp01(coherence - 0.1 + r() * 0.08),
+          anima: clamp01(coherence - 0.15 + r() * 0.1),
+        }),
+        planeWeights: JSON.stringify({ alpha: 0.25, beta: 0.30, gamma: 0.25, delta: 0.10, epsilon: 0.10 }),
+        ci95: JSON.stringify([Math.max(0, coherence - 0.05), Math.min(1, coherence + 0.05)]),
+        limitingPlane: ['anima', 'physical', 'conscious', 'mental'][i % 4],
+        volatility: vol,
+        emitted: passes,
+        createdAt: ts,
+      })
+    }
+    await db.signal.createMany({ data: signalRows })
+    console.log(`  ✅ ${e.label}: ${e.bhCount} behavioral hashes + ${points} historical signals`)
   }
 
   console.log('🌱 Seed complete.')
+}
+
+/** Seed 18 historical signal publications (24h trajectory) for one entity. */
+async function seedSignalHistory(
+  entityId: string,
+  e: { label: string; depth: number; coherenceHint: number },
+  now: number,
+) {
+  const r = rng(parseInt(entityId.slice(0, 8), 16) || 42)
+  const signalRows: Parameters<typeof db.signal.createMany>[0]['data'] = []
+  const points = 18
+  for (let i = points; i >= 1; i--) {
+    const ts = new Date(now - i * 80 * 60 * 1000)
+    const vol = clamp01(0.2 + 0.35 * Math.abs(Math.sin(i * 1.7 + e.depth)))
+    const theta = 0.55 + 0.37 * vol
+    const coherence = clamp01(e.coherenceHint + (r() - 0.5) * 0.12)
+    const passes = coherence >= theta
+    const status = !passes ? 'SILENCE'
+      : coherence - theta < 0.10 ? 'WARN' : 'NOMINAL'
+    const moat = Math.log1p(0.25 * e.depth / 10_000)
+    signalRows.push({
+      entityId,
+      type: passes ? 'VALUATION' : 'SILENCE',
+      status,
+      coherence,
+      threshold: theta,
+      margin: coherence - theta,
+      tValue: passes ? coherence * Math.exp(moat) : 0,
+      moat,
+      planes: JSON.stringify({
+        physical: clamp01(coherence - 0.08 + r() * 0.06),
+        mental: clamp01(coherence - 0.05 + r() * 0.05),
+        spiritual: clamp01(coherence + 0.02 * r()),
+        conscious: clamp01(coherence - 0.1 + r() * 0.08),
+        anima: clamp01(coherence - 0.15 + r() * 0.1),
+      }),
+      planeWeights: JSON.stringify({ alpha: 0.25, beta: 0.30, gamma: 0.25, delta: 0.10, epsilon: 0.10 }),
+      ci95: JSON.stringify([Math.max(0, coherence - 0.05), Math.min(1, coherence + 0.05)]),
+      limitingPlane: ['anima', 'physical', 'conscious', 'mental'][i % 4],
+      volatility: vol,
+      emitted: passes,
+      createdAt: ts,
+    })
+  }
+  await db.signal.createMany({ data: signalRows })
+  console.log(`  ✅ ${e.label}: ${points} historical signals`)
 }
 
 // Allow direct execution: bun run src/lib/trion/seed.ts

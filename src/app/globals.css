@@ -139,3 +139,67 @@
 @media (prefers-reduced-motion: reduce) {
   .live-dot, .stream-line, .fade-up { animation: none; }
 }
+
+/* ── Round-3 styling polish ──────────────────────────────────────────────── */
+
+/* Hero gradient glow */
+.hero-glow {
+  position: relative;
+}
+.hero-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(600px 200px at 20% 0%,
+    oklch(0.705 0.14 165 / 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+/* Gradient text for key numbers */
+.text-gradient-truth {
+  background: linear-gradient(135deg, oklch(0.84 0.14 165), oklch(0.705 0.14 165));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Row hover sweep effect for tables */
+tr.hover-sweep {
+  position: relative;
+}
+tr.hover-sweep > td {
+  transition: color 150ms ease;
+}
+
+/* Card lift on hover */
+.card-lift {
+  transition: transform 200ms ease, border-color 200ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: oklch(0.35 0.02 260);
+}
+
+/* Subtle glow border on focus panels */
+.gate-panel-pass {
+  box-shadow: 0 0 24px oklch(0.705 0.14 165 / 0.06) inset;
+}
+.gate-panel-fail {
+  box-shadow: 0 0 24px oklch(0.645 0.22 15 / 0.06) inset;
+}
+
+/* Number ticker transition */
+@keyframes count-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.count-in { animation: count-in 0.35s ease-out both; }
+
+/* Scrollbar corner rounding for panels */
+.panel-scroll::-webkit-scrollbar { width: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lift:hover { transform: none; }
+  .count-in { animation: none; }
+}

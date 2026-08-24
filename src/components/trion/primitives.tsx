@@ -39,7 +39,7 @@ export function StatTile({ label, value, sub, tone = 'default', live }: {
     bad: 'text-rose-400',
   }[tone]
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 transition-colors hover:border-zinc-700">
+    <div className="card-lift rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         {live && <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" aria-label="live" />}
         {label}

@@ -99,8 +99,8 @@ export function CoherenceView() {
           <div className={cn(
             'rounded-xl border p-5 transition-colors',
             signal.passes
-              ? 'border-emerald-500/30 bg-emerald-500/5'
-              : 'border-rose-500/30 bg-rose-500/5'
+              ? 'gate-panel-pass border-emerald-500/30 bg-emerald-500/5'
+              : 'gate-panel-fail border-rose-500/30 bg-rose-500/5'
           )}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>

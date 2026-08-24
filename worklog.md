@@ -206,3 +206,36 @@ Task: 15-min review cycle — found environment fully reset, rebuilt everything 
 2. **GitHub API rate limit** (shared sandbox IP): ~40% of repo fetches fail; cached-real-data fallback works honestly. Optional env: GITHUB_TOKEN raises limit
 3. **Signal history cold-starts** after every reset (signals table empty until Coherence Engine is visited). Consider seeding historical signals in seed.ts next round
 4. **Next round priorities**: (a) seed synthetic-but-realistic signal history at boot, (b) add E2E BTCP flow button on Overview, (c) entity detail drill-down (clickable entity board rows), (d) BRT phase visual clock, (e) persist app source to a git remote for reset-resilience (pending user approval)
+
+---
+Task ID: CRON-R2 (webDevReview round 2 — feature round)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable this round; QA passed; shipped 3 new features + styling polish
+
+## CURRENT PROJECT STATUS
+Environment STABLE (no reset this round — all files from CRON-R1 survived). App healthy: 1,600 BHs, 12 validators, 101 chains, 5/6 RPC probes online, lint clean, zero console errors across all 8 views.
+
+## COMPLETED THIS ROUND
+
+1. **QA first (agent-browser)**: all 8 views verified render + zero console errors — no bugs found, proceeded to feature work
+2. **NEW FEATURE A — Signal history seeding at boot** (fixes cold-start risk from CRON-R1):
+   - seed.ts: `seedSignalHistory()` — 18 historical publications per entity (24h trajectory, realistic drift around coherence hint, Θ(t) computed per-point, NOMINAL/WARN/SILENCE statuses, moat, CI95, limiting planes)
+   - Seed loop now independently checks hashes AND signals (backfills one without re-creating the other)
+   - /api/seed POST now backfills missing signal history idempotently
+   - Result: 216 signals seeded (105 emitted / 111 silenced — honest ~51% silence rate including manipulated entities)
+3. **NEW FEATURE B — BRT Phase Clock (L6.2)**:
+   - New component `brt-clock.tsx`: four live phase dials (circadian 24h / ultradian 90-min / lunar 29.53d / seasonal 365.25d) with rotating phase markers, second-by-second updates
+   - Next-window countdowns for circadian + ultradian boundaries; honest "CONJECTURE (F14)" label on BRT scheduling
+   - Wired into Overview between entity board and pipeline diagram
+4. **NEW FEATURE C — Entity drill-down slide-over**:
+   - New component `entity-detail.tsx`: full BEO profile panel (slide-over with backdrop, Escape-to-close, copy-BEO-id button with toast)
+   - Shows: live signal computation (C/Θ/T + gate status), five-plane mini bars with per-plane notes, C(t) history sparkline, BEO facts (archetype, depth, BH count, chains, etherscan-linked address), "Open in Coherence Engine" CTA
+   - Entity Board rows on Overview now clickable (cursor + hover affordance)
+5. **Styling polish (mandatory)**:
+   - hero-glow (radial emerald gradient on hero), text-gradient-truth (gradient headline), card-lift hover on StatTiles, gate-panel-pass/gate-panel-fail inset glows on the coherence gate result, count-in animation keyframes, panel scrollbars, prefers-reduced-motion respected
+6. **Verification**: lint clean; browser QA — BRT dials rendering (Circadian 85.3%, Ultradian 64.4%, Lunar 62.5%), seeded history + 51.0% silence rate visible, drill-down opens as dialog "Entity detail: Uniswap V3 Router" with SIGNAL EMITTED + Five Planes + BEO Profile, closes via Escape (0 dialogs remaining), mobile menu OK at 390px, ZERO console errors
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Environment resets remain the systemic risk — app source exists ONLY locally (my-project is not under git). trion-core is safe on GitHub. Next: ask user to authorize pushing the app repo, or snapshot to /home/z/my-project/download/ for reset-resilience
+2. GitHub API rate limit (sandbox IP) — cached fallback works; GITHUB_TOKEN would fix
+3. **Next round priorities**: (a) E2E BTCP quick-flow card on Overview (one-click register→execute), (b) NL score explorer view (LD·LO·LC·LS factor breakdown per chain), (c) keyboard shortcut for view switching (1–8), (d) export signal history as CSV/JSON from the UI

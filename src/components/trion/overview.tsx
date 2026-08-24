@@ -2,6 +2,7 @@
 
 // Overview — the TRION dashboard: master equation, live stats, signal feed.
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   fetchJSON, fmtInt, fmtCompact, truncateHex,
@@ -11,10 +12,13 @@ import {
   FormulaBlock, StatTile, SectionHeader, LiveBadge, Panel,
   SkeletonGrid, DataTableShell, Sparkline, SilenceLogRow,
 } from './primitives'
+import { EntityDetail } from './entity-detail'
+import { BrtClock } from './brt-clock'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export function OverviewView({ onNavigate }: { onNavigate: (view: string) => void }) {
+  const [detailBeo, setDetailBeo] = useState<string | null>(null)
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => fetchJSON<HealthResponse>('/api/health'),
@@ -45,7 +49,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
   return (
     <div className="space-y-8">
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="grid-pattern relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/20 px-6 py-10 sm:px-10">
+      <section className="hero-glow grid-pattern relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/20 px-6 py-10 sm:px-10">
         <div className="fade-up max-w-3xl">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <LiveBadge>Live · Akashic Index</LiveBadge>
@@ -59,7 +63,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
             )}
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
-            Behavioral Truth Infrastructure
+            <span className="text-gradient-truth">Behavioral Truth</span> Infrastructure
           </h1>
           <p className="mt-3 text-base leading-relaxed text-zinc-400">
             TRION is the verification layer for the age of synthetic everything. Truth emits only
@@ -171,9 +175,11 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
               Open Coherence Engine →
             </Button>
           }>
+          <p className="mb-2 text-[11px] text-zinc-600">Click any row for the full BEO drill-down.</p>
           <DataTableShell headers={['Entity', 'Archetype', 'C(t)', 'Depth', 'Trust', 'BHs']}>
             {entities.data?.entities.slice(0, 8).map(e => (
-              <tr key={e.id} className="transition-colors hover:bg-zinc-900/50">
+              <tr key={e.id} onClick={() => setDetailBeo(e.beoId)}
+                className="cursor-pointer transition-colors hover:bg-zinc-900/50">
                 <td className="px-3 py-2 font-medium text-zinc-200">{e.label}</td>
                 <td className="px-3 py-2 text-xs text-zinc-500">{e.archetype.replace(/_/g, ' ').toLowerCase()}</td>
                 <td className={`tabular px-3 py-2 font-mono ${e.coherence >= 0.55 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -232,6 +238,13 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
         </Panel>
       </section>
 
+      {/* ── BRT phase clock ─────────────────────────────────────────────── */}
+      <section>
+        <SectionHeader eyebrow="L6.2 — Biological Rhythm Timer" title="BRT Phase Clock"
+          description="Four biological rhythms govern timing intelligence: circadian (24h), ultradian (90-min), lunar (29.53d), and seasonal. DEFERRED BTCP routes schedule to the next ultradian low window." />
+        <BrtClock />
+      </section>
+
       {/* ── Pipeline diagram ────────────────────────────────────────────── */}
       <section>
         <SectionHeader eyebrow="Architecture" title="End-to-End Pipeline"
@@ -264,6 +277,15 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
           <div className="stream-line mt-4 h-px w-full" />
         </div>
       </section>
+
+      {/* Entity drill-down slide-over */}
+      {detailBeo && (
+        <EntityDetail
+          beoId={detailBeo}
+          onClose={() => setDetailBeo(null)}
+          onOpenCoherence={() => { setDetailBeo(null); onNavigate('coherence') }}
+        />
+      )}
     </div>
   )
 }
