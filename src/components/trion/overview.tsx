@@ -15,6 +15,7 @@ import {
 import { EntityDetail } from './entity-detail'
 import { BrtClock } from './brt-clock'
 import { BtcpQuickFlow } from './btcp-quick-flow'
+import { BhLiveStream } from './bh-live-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Download, FileJson } from 'lucide-react'
@@ -276,6 +277,13 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
             </Button>
           </div>
         </Panel>
+      </section>
+
+      {/* ── Live SSE stream ─────────────────────────────────────────────── */}
+      <section>
+        <SectionHeader eyebrow="L0.1 — Real-Time" title="Server-Pushed Hash Stream"
+          description="A true EventSource connection pushes new behavioral hashes the moment they land in the ledger — zero polling, sub-second latency." />
+        <BhLiveStream />
       </section>
 
       {/* ── E2E BTCP quick flow ──────────────────────────────────────────── */}

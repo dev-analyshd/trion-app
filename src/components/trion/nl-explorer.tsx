@@ -12,6 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Search } from 'lucide-react'
+import { NlChainDetail } from './nl-chain-detail'
 import { cn } from '@/lib/utils'
 
 export function NlExplorerView() {
@@ -22,6 +23,7 @@ export function NlExplorerView() {
   })
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<'nl' | 'ld' | 'lo' | 'lc' | 'ls'>('nl')
+  const [detailChain, setDetailChain] = useState<number | null>(null)
 
   const d = nl.data
   const chains = (d?.chains ?? [])
@@ -122,8 +124,9 @@ export function NlExplorerView() {
           <div className="max-h-[520px] overflow-y-auto panel-scroll">
             <DataTableShell headers={['Chain', 'VM', 'NL', 'LD', 'LO', 'LC', 'LS', 'Action']}>
               {chains.map(c => (
-                <tr key={c.chainId} className="transition-colors hover:bg-zinc-900/50">
-                  <td className="px-3 py-2 font-medium text-zinc-200">{c.name}</td>
+                <tr key={c.chainId} onClick={() => setDetailChain(c.chainId)}
+                  className="cursor-pointer transition-colors hover:bg-zinc-900/50">
+                  <td className="px-3 py-2 font-medium text-emerald-400/90 hover:text-emerald-300">{c.name}</td>
                   <td className="px-3 py-2">
                     <Badge variant="outline" className="border-zinc-700 text-[10px] text-zinc-400">{c.vm}</Badge>
                   </td>
@@ -158,7 +161,11 @@ export function NlExplorerView() {
             </DataTableShell>
           </div>
         )}
+        <p className="mt-3 text-[11px] text-zinc-600">Click any chain row for the full NL factor drill-down with per-factor time-series.</p>
       </Panel>
+
+      {/* Chain drill-down dialog */}
+      <NlChainDetail chainId={detailChain} onClose={() => setDetailChain(null)} />
     </div>
   )
 }

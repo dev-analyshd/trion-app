@@ -14,6 +14,7 @@ import { SecurityView } from '@/components/trion/security-view'
 import { ArchitectureView } from '@/components/trion/architecture-view'
 import { NlExplorerView } from '@/components/trion/nl-explorer'
 import { KeyboardHelp } from '@/components/trion/keyboard-help'
+import { ThemeToggle } from '@/components/trion/theme-toggle'
 import { cn } from '@/lib/utils'
 import { Menu, X } from 'lucide-react'
 
@@ -130,6 +131,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4">
               <LiveClock />
+              <ThemeToggle />
               <button
                 onClick={() => setHelpOpen(true)}
                 aria-label="Keyboard shortcuts"

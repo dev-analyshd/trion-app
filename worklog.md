@@ -276,3 +276,32 @@ Environment STABLE (3rd consecutive round without reset). App healthy: 1,600 BHs
 1. agent-browser coordinate clicks unreliable on buttons below the sticky header in long pages — use `eval` + `.click()` for QA automation (documented workaround)
 2. Environment reset risk unchanged — app source still local-only
 3. **Next round priorities**: (a) WS/SSE live push for BH stream (replace polling), (b) Coherence profile editor (save custom α–ε weights per entity), (c) dark/light theme toggle, (d) NL explorer chain drill-down with per-factor time-series
+
+---
+Task ID: CRON-R4 (webDevReview round 4 — SSE + NL drill-down + theme)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; shipped SSE live stream, NL chain drill-down, dark/light theme
+
+## CURRENT PROJECT STATUS
+Environment STABLE (4th consecutive round). App: 1,600 BHs, 219 signals, 101 chains, 5/6 RPC probes, lint clean, 0 console errors. Now 3 real-time/interactive layers deep: polling (react-query) + SSE push + drill-down dialogs.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Live SSE hash stream** (`/api/bh/stream` + `bh-live-stream.tsx`):
+   - New Server-Sent Events route: ReadableStream + TextEncoder emitting `hello`/`bh`/`ping` events every 4s poll of new ledger rows (id-deduped, invariant re-verified per event), clean abort handling on client disconnect
+   - UI component: EventSource connection with connected/reconnecting badge, ping timestamp, newest-8 feed with emerald flash animation on arrival
+   - Verified in browser: "SSE connected" + ping ticker live
+2. **FEATURE — NL chain drill-down** (`nl-chain-detail.tsx`):
+   - Clicking any chain row in NL Explorer opens a dialog: NL headline (score, threshold position, gas/finality), 4 per-factor sparklines (LD/LO/LC/LS with distinct tones), NL composite 30-period trajectory with dashed 0.30 alert threshold, full factor formula breakdown
+   - Deterministic per-chain series (seeded by chainId+factor) — stable across renders
+   - Verified: dialog "Metis Andromeda … ROUTABLE" opens with healthy-regime composite
+3. **FEATURE — Dark/light theme toggle** (`theme-toggle.tsx`):
+   - Full light-theme token set in globals.css (html.light: institutional paper — white cards, dark text, deeper emerald primary) + light overrides for grid-pattern, stream-line, hero-glow, scrollbars, selection
+   - Toggle button (Sun/Moon) in header; persisted to localStorage['trion-theme']; applied post-mount to avoid hydration mismatch
+   - Verified: click → LIGHT-MODE-ON (screenshot), click again → DARK-RESTORED, localStorage = "dark"
+4. **QA**: keyboard nav through all 9 views clean; 0 console errors; mobile 390px renders 9 buttons incl. theme toggle; lint clean
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. SSE route polls DB every 4s per connected client — fine at demo scale; for multi-client use a shared broadcaster or SQLite WAL + LISTEN/NOTIFY would be needed
+2. Light theme is functional but some deep-zinc utility classes (text-zinc-500 etc.) could be tuned further for contrast on paper background
+3. **Next round priorities**: (a) coherence profile editor (persist custom α–ε per entity), (b) signal detail dialog (click history rows → full plane JSON), (c) overview health heartbeat sparkline (RPC latency over time), (d) app source snapshot to /home/z/my-project/download/ for reset-resilience
