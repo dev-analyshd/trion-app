@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON, fmtInt, fmtCompact, type ArchetypesResponse } from '@/lib/trion/client'
 import {
-  FormulaBlock, StatTile, SectionHeader, Panel, MeterBar, SkeletonGrid,
+  FormulaBlock, StatTile, SectionHeader, Panel, MeterBar, SkeletonGrid, Sparkline,
 } from './primitives'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -116,6 +116,23 @@ export function ArchetypesView() {
                   </span>
                 ))}
               </div>
+            </div>
+
+            {/* BH activity time-series (48h) */}
+            <div className="mt-3">
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  BH activity — last 48h (hourly)
+                </span>
+                <span className="tabular font-mono text-[10px] text-zinc-600">
+                  peak {Math.max(...a.bhSeries)}/h
+                </span>
+              </div>
+              <Sparkline
+                values={a.bhSeries}
+                width={440} height={40}
+                tone={a.risk.tier === 'HIGH' ? '#f43f5e' : a.risk.tier === 'MEDIUM' ? '#fbbf24' : '#10b981'}
+              />
             </div>
 
             {/* stats row */}

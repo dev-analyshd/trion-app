@@ -391,3 +391,31 @@ Environment STABLE (7th consecutive round). App: 1,600 BHs, 228 signals, 101 cha
 ## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
 1. Route analytics thin until more flows run — consider seeding 3-4 historical BTCP intents in seed.ts next round
 2. **Next round priorities**: (a) seed BTCP historical intents for richer analytics, (b) archetype drill-down (per-archetype BH time-series), (c) signal donut click-through to filtered history, (d) bundle snapshot refresh into every round close
+
+---
+Task ID: CRON-R8 (webDevReview round 8 — BTCP seed + archetype sparklines + donut filter)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; seeded BTCP history, archetype BH sparklines, donut click-through; fixed runtime ReferenceError
+
+## CURRENT PROJECT STATUS
+Environment STABLE (8th consecutive round). App: 1,600 BHs, 228 signals, 8 BTCP intents (7 seeded + 1 live), 101 chains, 5/6 RPC probes, lint clean, 0 console errors.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Historical BTCP seeding** (seed.ts):
+   - 7 realistic intents across 6 route types (SINGLE_CHAIN/SPLIT/NETTING/MULTI_HOP/BITP/DEFERRED) with routes + escrows: 5 RELEASED, 1 REVERTED (failed route), 1 HOLDING (executing) — spread over 26h with proper timestamps, coherence-at-release values
+   - Analytics now rich: routes/finalized/avg-saved/value-routed tiles + full frequency bars verified in browser
+2. **FEATURE — Archetype BH sparklines** (drill-down):
+   - /api/archetypes extended with per-archetype 48h hourly BH-volume series (bucketed SQL-side)
+   - Archetype cards now show "BH ACTIVITY — LAST 48H (HOURLY)" sparklines with peak/h readouts, risk-tone colored — verified 11 SVGs rendering
+3. **FEATURE — Donut click-through filter**:
+   - Donut segments + legend rows clickable: selected segment expands (strokeWidth 26), others dim to 0.35; SILENCE log + history count filter live; removable "SILENCE ✕" chip on the history panel
+   - Verified: click "silence" legend → "SILENCE filter" badge + filter chip → click chip → FILTER-CLEARED
+4. **BUG FIXED — runtime ReferenceError** (`selected is not defined`):
+   - The click-through state lived in SignalTypeDonut but was referenced inside the Donut subcomponent — crashed the whole app with a client-side exception (global error boundary)
+   - Fixed by passing selected + onToggle as props into Donut; also deduped a double `cn` import that briefly broke the build
+5. QA: all 10 views clean; 17 mobile buttons; lint clean; snapshot refreshed (145 files)
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Dev-mode Fast Refresh occasionally surfaces stale build errors until a full reload — remember to hard-reload after hot edits that touch imports
+2. **Next round priorities**: (a) per-entity event-mix mini-bars in entity drill-down, (b) BTCP analytics date-bucket sparkline (routes over time), (c) print/export archetype cards, (d) consider moving seeded BTCP intent ages relative to now at boot

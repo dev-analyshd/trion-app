@@ -26,6 +26,7 @@ import { Download, FileJson } from 'lucide-react'
 export function OverviewView({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [detailBeo, setDetailBeo] = useState<string | null>(null)
   const [detailSignal, setDetailSignal] = useState<SignalDetailData | null>(null)
+  const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => fetchJSON<HealthResponse>('/api/health'),
@@ -50,7 +51,9 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
   const h = health.data
   const onlineProbes = h?.liveRpcProbes?.filter(p => p.online).length ?? 0
   const hist = history.data
-  const silenceEvents = hist?.signals.filter(s => s.status === 'SILENCE').slice(-6).reverse() ?? []
+  const silenceEvents = (hist?.signals ?? [])
+    .filter(s => s.status === 'SILENCE' && (!typeFilter || s.type === typeFilter))
+    .slice(-6).reverse()
   const coherenceSeries = hist?.signals.map(s => s.coherence) ?? []
 
   const exportHistory = (format: 'csv' | 'json') => {
@@ -148,7 +151,13 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
                   title="Export as JSON">
                   <FileJson className="h-3 w-3" /> JSON
                 </Button>
-                <LiveBadge>{hist.total} signals</LiveBadge>
+                {typeFilter && (
+                  <button onClick={() => setTypeFilter(null)}
+                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400 transition-colors hover:bg-emerald-500/20">
+                    {typeFilter} ✕
+                  </button>
+                )}
+                <LiveBadge>{typeFilter ? hist.signals.filter(x => x.type === typeFilter).length : hist.total} signals</LiveBadge>
               </div>
             }>
             <div className="flex flex-col gap-1">
@@ -194,7 +203,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
           </Panel>
 
           <div className="lg:col-span-1">
-            <SignalTypeDonut />
+            <SignalTypeDonut onSelect={setTypeFilter} />
           </div>
         </section>
       )}

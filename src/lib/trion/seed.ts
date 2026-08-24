@@ -4,6 +4,7 @@
 import { PrismaClient } from '@prisma/client'
 import { CHAINS } from '@/lib/trion/chains'
 import { computeBehavioralHash, beoIdFromAddress } from '@/lib/trion/behavioral-hash'
+import { sha3_256 } from 'js-sha3'
 import { EVENT_TYPES, type EventType, clamp01 } from '@/lib/trion/constants'
 
 const db = new PrismaClient()
@@ -137,6 +138,60 @@ export async function seed() {
       data: VALIDATORS.map(v => ({ ...v, effectiveStake: v.stake * v.diversityWeight, status: 'ACTIVE' })),
     })
     console.log(`  ✅ ${VALIDATORS.length} DW-BFT validators across 6 continents`)
+  }
+
+  // 2.5 — Historical BTCP intents/routes/escrows (rich analytics on first boot)
+  if (await db.btcpIntent.count() === 0) {
+    const seedIntents = [
+      { action: 'SWAP', assetIn: 'ETH', assetOut: 'USDC', magnitude: 10000, src: 1, dst: 8453, type: 'SINGLE_CHAIN', score: 0.813, gas: 0.05, saved: 99.5, status: 'COMPLETED', escState: 'RELEASED', ageH: 26 },
+      { action: 'SWAP', assetIn: 'ETH', assetOut: 'SOL', magnitude: 25000, src: 42161, dst: 900, type: 'SPLIT', score: 0.742, gas: 0.35, saved: 97.1, status: 'COMPLETED', escState: 'RELEASED', ageH: 22 },
+      { action: 'SWAP', assetIn: 'USDC', assetOut: 'ETH', magnitude: 50000, src: 8453, dst: 1, type: 'NETTING', score: 0.968, gas: 0.05, saved: 99.8, status: 'COMPLETED', escState: 'RELEASED', ageH: 18 },
+      { action: 'TRANSFER', assetIn: 'USDC', assetOut: 'USDC', magnitude: 5000, src: 137, dst: 10, type: 'MULTI_HOP', score: 0.691, gas: 0.12, saved: 95.2, status: 'COMPLETED', escState: 'RELEASED', ageH: 12 },
+      { action: 'SWAP', assetIn: 'BTC', assetOut: 'USDC', magnitude: 100000, src: 21000, dst: 42161, type: 'BITP', score: 0.587, gas: 0.02, saved: 99.9, status: 'COMPLETED', escState: 'RELEASED', ageH: 8 },
+      { action: 'SWAP', assetIn: 'ETH', assetOut: 'USDT', magnitude: 15000, src: 1, dst: 56, type: 'SPLIT', score: 0.715, gas: 0.28, saved: 96.4, status: 'FAILED', escState: 'REVERTED', ageH: 5 },
+      { action: 'SWAP', assetIn: 'SOL', assetOut: 'USDC', magnitude: 8000, src: 900, dst: 8453, type: 'DEFERRED', score: 0.763, gas: 0.08, saved: 78.0, status: 'EXECUTING', escState: 'HOLDING', ageH: 2 },
+    ]
+    const ents = await db.entity.findMany({ orderBy: { depth: 'desc' }, take: 7 })
+    for (let i = 0; i < seedIntents.length; i++) {
+      const it = seedIntents[i]
+      const ent = ents[i % ents.length]
+      const createdAt = new Date(Date.now() - it.ageH * 3600_000)
+      const intentHash = sha3_256(`seed-intent:${i}:${ent.beoId}:${it.magnitude}`)
+      const intent = await db.btcpIntent.create({
+        data: {
+          intentHash, entityId: ent.id, action: it.action,
+          assetIn: it.assetIn, assetOut: it.assetOut, magnitude: it.magnitude,
+          sourceChain: it.src, destChain: it.dst, maxGasUsd: 50,
+          minNl: 0.3, deadlineMin: 60, status: it.status, routeType: it.type,
+          createdAt,
+        },
+      })
+      const routeId = sha3_256(`seed-route:${intentHash}`)
+      const route = await db.btcpRoute.create({
+        data: {
+          routeId, intentId: intent.id, routeType: it.type,
+          anchorChain: it.src, executionChain: it.dst,
+          btcpScore: it.score, gasCostUsd: it.gas, gasSavedPct: it.saved,
+          beoContinuity: 0.85, ccCoherence: 0.78, mfScore: 0.05,
+          finalityConf: 0.88,
+          status: it.status === 'COMPLETED' ? 'FINALIZED' : it.status,
+          createdAt,
+        },
+      })
+      const escrowId = sha3_256(`seed-escrow:${routeId}`).slice(0, 40)
+      await db.btcpEscrow.create({
+        data: {
+          escrowId, routeId: route.id, amountUsd: it.magnitude,
+          state: it.escState,
+          lockBlock: Math.floor(createdAt.getTime() / 12000),
+          timeoutBlocks: 3600,
+          coherenceAtRelease: it.escState === 'RELEASED' ? 0.62 + (i % 3) * 0.08 : null,
+          resolvedAt: it.escState !== 'HOLDING' ? new Date(createdAt.getTime() + 1800_000) : null,
+          createdAt,
+        },
+      })
+    }
+    console.log(`  ✅ ${seedIntents.length} historical BTCP intents (routes + escrows)`)
   }
 
   // 3 — Entities + behavioral hashes

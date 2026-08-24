@@ -214,6 +214,7 @@ export interface ArchetypesResponse {
     entities: { label: string; coherence: number; depth: number; bhCount: number; kind: string }[]
     topEvents: { type: string; count: number; pct: number }[]
     risk: { tier: string; note: string }
+    bhSeries: number[]
   }[]
 }
 

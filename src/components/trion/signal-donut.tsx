@@ -2,6 +2,7 @@
 
 // Signal type donut — publication mix across the signal ledger.
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON, type SignalHistoryResponse } from '@/lib/trion/client'
 import { Panel, LiveBadge } from './primitives'
@@ -30,10 +31,12 @@ function computeStartOffsets(
   return offsets
 }
 
-/** SVG donut chart — segments with hover-expand + center total. */
-function Donut({ segments, size = 160 }: {
+/** SVG donut chart — segments with click-to-filter + center total. */
+function Donut({ segments, size = 160, selected, onToggle }: {
   segments: { label: string; value: number; color: string }[]
   size?: number
+  selected: string | null
+  onToggle: (label: string) => void
 }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1
   const r = 60
@@ -55,11 +58,13 @@ function Donut({ segments, size = 160 }: {
             cx={cx} cy={cy} r={r}
             fill="none"
             stroke={seg.color}
-            strokeWidth={22}
+            strokeWidth={selected === seg.label ? 26 : 22}
             strokeDasharray={`${dash} ${circumference - dash}`}
             strokeDashoffset={-startOffsets[i]}
             transform="rotate(-90 80 80)"
-            opacity={0.9}
+            opacity={selected === null || selected === seg.label ? 0.95 : 0.35}
+            className="cursor-pointer transition-all"
+            onClick={() => toggle(seg.label)}
           >
             <title>{`${seg.label}: ${seg.value} (${(frac * 100).toFixed(1)}%)`}</title>
           </circle>
@@ -76,12 +81,19 @@ function Donut({ segments, size = 160 }: {
   )
 }
 
-export function SignalTypeDonut() {
+export function SignalTypeDonut({ onSelect }: { onSelect?: (type: string | null) => void } = {}) {
+  const [selected, setSelected] = useState<string | null>(null)
   const history = useQuery({
     queryKey: ['signal-history'],
     queryFn: () => fetchJSON<SignalHistoryResponse>('/api/signals/history?limit=300'),
     refetchInterval: 15000,
   })
+
+  const toggle = (type: string) => {
+    const next = selected === type ? null : type
+    setSelected(next)
+    onSelect?.(next)
+  }
 
   const signals = history.data?.signals ?? []
   const byType = new Map<string, number>()
@@ -97,22 +109,24 @@ export function SignalTypeDonut() {
   const total = segments.reduce((s, x) => s + x.value, 0)
 
   return (
-    <Panel title="Signal Type Mix" action={<LiveBadge>{total} publications</LiveBadge>}>
+    <Panel title="Signal Type Mix" action={<LiveBadge>{selected ? `${selected} filter` : `${total} publications`}</LiveBadge>}>
       {segments.length === 0 ? (
         <p className="py-8 text-center text-xs text-zinc-600">no publications yet</p>
       ) : (
         <div className="flex flex-col items-center gap-4 sm:flex-row">
-          <Donut segments={segments} />
+          <Donut segments={segments} selected={selected} onToggle={toggle} />
           <div className="flex-1 space-y-1.5">
             {segments.map(seg => (
-              <div key={seg.label} className="flex items-center gap-2.5">
-                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: seg.color }} />
+              <button key={seg.label} onClick={() => toggle(seg.label)}
+                className={cn('flex w-full items-center gap-2.5 rounded px-1 py-0.5 text-left transition-colors',
+                  selected === seg.label ? 'bg-zinc-800/60' : 'hover:bg-zinc-900/40')}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: seg.color }} />
                 <span className="flex-1 text-xs text-zinc-300">{seg.label.replace(/_/g, ' ').toLowerCase()}</span>
                 <span className="tabular font-mono text-xs text-zinc-400">{seg.value}</span>
                 <span className="tabular w-12 text-right font-mono text-[11px] text-zinc-500">
                   {total > 0 ? `${((seg.value / total) * 100).toFixed(0)}%` : '—'}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

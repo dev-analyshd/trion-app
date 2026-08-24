@@ -91,6 +91,27 @@ export async function GET() {
 
   const totalBh = archetypes.reduce((s, a) => s + a.bhVolume, 0)
 
+  // Per-archetype BH hourly volume (last 48h buckets) for drill-down sparklines
+  const since = new Date(Date.now() - 48 * 3600_000)
+  const recentBh = await db.behavioralHash.findMany({
+    where: { timestamp: { gte: since } },
+    select: { entityId: true, timestamp: true },
+  })
+  const entityToArchetype = new Map(entities.map(e => [e.id, e.archetype]))
+  const BUCKETS = 48
+  const nowMs = Date.now()
+  const bucketMs = 3600_000
+  // archetype -> bucket counts
+  const series = new Map<string, number[]>()
+  for (const bh of recentBh) {
+    const arch = entityToArchetype.get(bh.entityId)
+    if (!arch) continue
+    const arr = series.get(arch) ?? new Array(BUCKETS).fill(0)
+    const bucket = Math.floor((nowMs - bh.timestamp.getTime()) / bucketMs)
+    if (bucket >= 0 && bucket < BUCKETS) arr[BUCKETS - 1 - bucket]++
+    series.set(arch, arr)
+  }
+
   // Risk tier mapping (from seed archetypes)
   const RISK_TIERS: Record<string, { tier: string; note: string }> = {
     HEALTHY_DEFI: { tier: 'LOW', note: 'Diversified protocol behavior — normal DeFi cycle' },
@@ -111,6 +132,7 @@ export async function GET() {
       ...a,
       risk: RISK_TIERS[a.archetype] ?? { tier: 'UNKNOWN', note: 'Unclassified archetype' },
       bhShare: totalBh > 0 ? a.bhVolume / totalBh : 0,
+      bhSeries: series.get(a.archetype) ?? new Array(48).fill(0),
     })),
   })
 }
