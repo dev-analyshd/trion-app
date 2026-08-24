@@ -15,6 +15,7 @@ const SHORTCUTS: { keys: string; label: string; group: string }[] = [
   { keys: '7', label: 'ANIMA Intelligence', group: 'Views' },
   { keys: '8', label: 'Security', group: 'Views' },
   { keys: '9', label: 'Architecture', group: 'Views' },
+  { keys: '0', label: 'Archetype Distribution', group: 'Views' },
   { keys: '?', label: 'Toggle this help', group: 'Global' },
   { keys: 'Esc', label: 'Close panels & menus', group: 'Global' },
 ]

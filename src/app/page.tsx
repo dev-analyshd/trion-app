@@ -13,6 +13,7 @@ import { AnimaView } from '@/components/trion/anima-view'
 import { SecurityView } from '@/components/trion/security-view'
 import { ArchitectureView } from '@/components/trion/architecture-view'
 import { NlExplorerView } from '@/components/trion/nl-explorer'
+import { ArchetypesView } from '@/components/trion/archetypes-view'
 import { KeyboardHelp } from '@/components/trion/keyboard-help'
 import { ThemeToggle } from '@/components/trion/theme-toggle'
 import { cn } from '@/lib/utils'
@@ -32,6 +33,7 @@ const NAV = [
   { id: 'anima', label: 'ANIMA Intelligence', key: '7' },
   { id: 'security', label: 'Security', key: '8' },
   { id: 'architecture', label: 'Architecture', key: '9' },
+  { id: 'archetypes', label: 'Archetypes', key: '0' },
 ]
 
 function Logo() {
@@ -84,7 +86,7 @@ export default function Home() {
       const target = e.target as HTMLElement
       // Don't hijack typing in inputs/selects/textareas
       if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-      if (e.key >= '1' && e.key <= '9') {
+      if ((e.key >= '1' && e.key <= '9') || e.key === '0') {
         const item = NAV.find(n => n.key === e.key)
         if (item) navigate(item.id)
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
@@ -184,6 +186,7 @@ export default function Home() {
           {view === 'anima' && <AnimaView />}
           {view === 'security' && <SecurityView />}
           {view === 'architecture' && <ArchitectureView />}
+          {view === 'archetypes' && <ArchetypesView />}
         </main>
 
         {/* Keyboard help overlay */}

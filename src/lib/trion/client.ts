@@ -199,3 +199,44 @@ export interface NlResponse {
   worstChains: { name: string; nl: number }[]
   bestChains: { name: string; nl: number }[]
 }
+
+export interface ArchetypesResponse {
+  totalArchetypes: number
+  totalEntities: number
+  totalBehavioralHashes: number
+  archetypes: {
+    archetype: string
+    entityCount: number
+    bhVolume: number
+    bhShare: number
+    avgCoherence: number
+    totalDepth: number
+    entities: { label: string; coherence: number; depth: number; bhCount: number; kind: string }[]
+    topEvents: { type: string; count: number; pct: number }[]
+    risk: { tier: string; note: string }
+  }[]
+}
+
+export interface BtcpIntentsResponse {
+  count: number
+  intents: {
+    id: string
+    entity: string
+    action: string
+    assetIn: string
+    assetOut: string
+    magnitudeUsd: number
+    status: string
+    routeType: string | null
+    createdAt: string
+    routes: {
+      routeId: string
+      type: string
+      btcpScore: number
+      gasCostUsd?: number
+      gasSavedPct: number
+      status: string
+      escrow: { escrowId: string; state: string; amountUsd: number } | null
+    }[]
+  }[]
+}

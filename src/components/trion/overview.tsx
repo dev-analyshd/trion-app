@@ -18,6 +18,7 @@ import { BtcpQuickFlow } from './btcp-quick-flow'
 import { BhLiveStream } from './bh-live-stream'
 import { RpcHeartbeat } from './rpc-heartbeat'
 import { SignalDetail, type SignalDetailData } from './signal-detail'
+import { SignalTypeDonut } from './signal-donut'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Download, FileJson } from 'lucide-react'
@@ -133,7 +134,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
 
       {/* ── NEW: Signal history + SILENCE log ───────────────────────────── */}
       {hist && hist.total > 0 && (
-        <section className="grid gap-4 lg:grid-cols-5">
+        <section className="grid gap-4 lg:grid-cols-6">
           <Panel title="Coherence History (live ledger)" className="lg:col-span-3"
             action={
               <div className="flex items-center gap-1.5">
@@ -174,6 +175,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
           </Panel>
 
           <Panel title="SILENCE Log — the honesty ledger" className="lg:col-span-2"
+
             action={<Badge variant="outline" className="border-zinc-700 text-zinc-500">C &lt; Θ</Badge>}>
             <div className="max-h-[180px] space-y-1.5 overflow-y-auto pr-1">
               {silenceEvents.length === 0 ? (
@@ -190,6 +192,10 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
               )}
             </div>
           </Panel>
+
+          <div className="lg:col-span-1">
+            <SignalTypeDonut />
+          </div>
         </section>
       )}
 

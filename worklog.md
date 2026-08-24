@@ -360,3 +360,34 @@ Environment STABLE (6th consecutive round). App: 1,600 BHs, 221 signals, 101 cha
 ## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
 1. Console errors observed only during dev HMR of edited files — no production impact; verify with fresh reloads
 2. **Next round priorities**: (a) archetype distribution view (12-archetype matrix from seed entities), (b) signal type breakdown donut on Overview, (c) BTCP route history analytics (route-type frequency + avg savings), (d) consider bundling snapshot refresh into the cron workflow
+
+---
+Task ID: CRON-R7 (webDevReview round 7 — archetypes view + donut + route analytics)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; shipped 10th view (Archetype Distribution), signal-type donut, BTCP route analytics
+
+## CURRENT PROJECT STATUS
+Environment STABLE (7th consecutive round). App: 1,600 BHs, 228 signals, 101 chains, 5/6 RPC probes, lint clean, 0 console errors. Now 10 views (archetypes added at key 0).
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Archetype Distribution view (10th view, key 0)** (`archetypes-view.tsx` + `/api/archetypes`):
+   - API aggregates per-archetype: entity count, BH volume + share, avg coherence, total depth, member entities, top-5 event-type mix (with names), risk tiers (LOW→HIGH with notes)
+   - View: stat tiles, BH-volume distribution bars (risk-tone colored), archetype cards with stacked event-signature bars + legends + member entity rows, L2.2 genesis-inference formula block
+   - 8 archetypes across 12 entities / 1,600 BHs (HEALTHY_DEFI 47.5% → PONZI_STRUCTURE HIGH risk)
+2. **FEATURE — Signal type donut on Overview** (`signal-donut.tsx`):
+   - Pure-SVG donut (stroke-dasharray segments, center total) with color legend + per-type counts/percentages; placed as 6th column in the history/silence grid
+   - Lint-safe cumulative offsets via module-level helper (react-hooks/immutability rule)
+3. **FEATURE — BTCP route analytics** (`btcp-analytics.tsx`):
+   - Ledger tab now opens with stats grid (routes / finalized / avg saved / value routed), route-type frequency bars with avg-savings per type, zero-bridge ledger formula block
+4. **BUG FIXED**: donut panel wasn't rendering — the sed insertion pattern missed (closing text mismatch); manually placed inside the history section
+5. **QA note**: Radix tab switching requires real user-like clicks (agent-browser `find text X click` works; raw `.click()` on the tab node doesn't trigger panel change — event-coordinate dependent)
+6. **Snapshot refreshed**: 145 files (archetypes view/API, donut, analytics included)
+
+## VERIFICATION
+- Archetypes view: heading + HIGH risk badges render (key 0 nav); donut: "Signal Type Mix" + SVG rendered on Overview; analytics: ROUTES/FINALIZED/AVG SAVED/VALUE ROUTED tiles + "1 routes · $10,000 value · 0 assets bridged" formula
+- 0 console errors, 15 mobile buttons, lint clean
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Route analytics thin until more flows run — consider seeding 3-4 historical BTCP intents in seed.ts next round
+2. **Next round priorities**: (a) seed BTCP historical intents for richer analytics, (b) archetype drill-down (per-archetype BH time-series), (c) signal donut click-through to filtered history, (d) bundle snapshot refresh into every round close

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { BtcpAnalytics } from './btcp-analytics'
 import { Zap, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -388,6 +389,7 @@ export function BtcpView() {
 
         {/* ── Intents ledger ─────────────────────────────────────────── */}
         <TabsContent value="intents" className="space-y-4">
+          <BtcpAnalytics />
           <Panel title="BTCP Intent Ledger" action={<LiveBadge>live</LiveBadge>}>
             <DataTableShell headers={['Entity', 'Action', 'Magnitude', 'Route', 'Score', 'Gas Saved', 'Escrow', 'Status']}>
               {(intents.data as { intents: any[] })?.intents?.map((i: any) => (
