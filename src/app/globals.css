@@ -252,3 +252,45 @@ tr.hover-sweep > td {
   .card-lift:hover { transform: none; }
   .count-in { animation: none; }
 }
+
+/* ── Round-5 polish ───────────────────────────────────────────────────────── */
+
+/* Active nav underline sweep */
+.nav-sweep { position: relative; }
+.nav-sweep::after {
+  content: '';
+  position: absolute;
+  left: 10%; right: 10%; bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, oklch(0.705 0.14 165), transparent);
+  transform: scaleX(0);
+  transition: transform 250ms ease;
+}
+.nav-sweep:hover::after { transform: scaleX(0.6); }
+.nav-sweep[data-active="true"]::after { transform: scaleX(1); }
+
+/* Light theme contrast tuning */
+html.light .text-zinc-500 { color: oklch(0.42 0.012 260); }
+html.light .text-zinc-600 { color: oklch(0.38 0.012 260); }
+html.light .border-zinc-800 { border-color: oklch(0.88 0.005 260); }
+html.light .border-zinc-800\/60 { border-color: oklch(0.88 0.005 260 / 0.7); }
+html.light .bg-zinc-900\/40 { background-color: oklch(0.965 0.003 260); }
+html.light .bg-zinc-900\/20 { background-color: oklch(0.975 0.002 260); }
+html.light .bg-zinc-900\/60 { background-color: oklch(0.94 0.004 260); }
+html.light .bg-zinc-950\/90 { background-color: oklch(0.99 0 0 / 0.92); }
+html.light .bg-zinc-950 { background-color: oklch(0.985 0.002 260); }
+
+/* Dialog/backdrop light tuning */
+html.light [data-radix-dialog-overlay] { background: oklch(0.2 0.01 260 / 0.35); }
+
+/* Focus ring polish */
+:focus-visible {
+  outline: 2px solid oklch(0.705 0.14 165 / 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+html.light :focus-visible { outline-color: oklch(0.55 0.13 165 / 0.8); }
+
+/* Table row focus for keyboard users */
+tbody tr:focus-visible { outline-offset: -2px; }

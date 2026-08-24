@@ -113,11 +113,12 @@ export default function Home() {
                     key={item.id}
                     onClick={() => navigate(item.id)}
                     className={cn(
-                      'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                      'nav-sweep flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
                       view === item.id
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : 'text-zinc-400 hover:text-zinc-200'
                     )}
+                    data-active={view === item.id}
                     aria-current={view === item.id ? 'page' : undefined}
                   >
                     {item.label}

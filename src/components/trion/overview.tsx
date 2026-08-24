@@ -16,12 +16,15 @@ import { EntityDetail } from './entity-detail'
 import { BrtClock } from './brt-clock'
 import { BtcpQuickFlow } from './btcp-quick-flow'
 import { BhLiveStream } from './bh-live-stream'
+import { RpcHeartbeat } from './rpc-heartbeat'
+import { SignalDetail, type SignalDetailData } from './signal-detail'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Download, FileJson } from 'lucide-react'
 
 export function OverviewView({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [detailBeo, setDetailBeo] = useState<string | null>(null)
+  const [detailSignal, setDetailSignal] = useState<SignalDetailData | null>(null)
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => fetchJSON<HealthResponse>('/api/health'),
@@ -179,8 +182,10 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
                 </p>
               ) : (
                 silenceEvents.map(s => (
-                  <SilenceLogRow key={s.id} entity={s.entity} coherence={s.coherence}
-                    threshold={s.threshold} limitingPlane={s.limitingPlane} createdAt={s.createdAt} />
+                  <button key={s.id} onClick={() => setDetailSignal(s)} className="w-full text-left">
+                    <SilenceLogRow entity={s.entity} coherence={s.coherence}
+                      threshold={s.threshold} limitingPlane={s.limitingPlane} createdAt={s.createdAt} />
+                  </button>
                 ))
               )}
             </div>
@@ -190,24 +195,9 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
 
       {/* ── RPC liveness + entity board ─────────────────────────────────── */}
       <section className="grid gap-4 lg:grid-cols-5">
-        <Panel title="Live RPC Probes" className="lg:col-span-2"
-          action={<LiveBadge>real public RPCs</LiveBadge>}>
-          <div className="space-y-2.5">
-            {h?.liveRpcProbes?.map(p => (
-              <div key={p.chain} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className={`live-dot h-2 w-2 rounded-full ${p.online ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-                  <span className="text-zinc-300">{p.chain}</span>
-                  <Badge variant="outline" className="border-zinc-700 text-[10px] text-zinc-500">{p.vm}</Badge>
-                </div>
-                <span className="tabular font-mono text-xs text-zinc-500">{p.latencyMs}ms</span>
-              </div>
-            )) ?? <SkeletonGrid count={4} className="grid-cols-1" />}
-            <p className="pt-2 text-[11px] leading-relaxed text-zinc-600">
-              Direct JSON-RPC to public endpoints. Solana getSlot, EVM eth_blockNumber, Bitcoin blockstream tip.
-            </p>
-          </div>
-        </Panel>
+        <div className="lg:col-span-2">
+          <RpcHeartbeat />
+        </div>
 
         <Panel title="Entity Board" className="lg:col-span-3"
           action={
@@ -341,6 +331,9 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
           onOpenCoherence={() => { setDetailBeo(null); onNavigate('coherence') }}
         />
       )}
+
+      {/* Signal detail dialog */}
+      <SignalDetail signal={detailSignal} onClose={() => setDetailSignal(null)} />
     </div>
   )
 }

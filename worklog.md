@@ -305,3 +305,31 @@ Environment STABLE (4th consecutive round). App: 1,600 BHs, 219 signals, 101 cha
 1. SSE route polls DB every 4s per connected client — fine at demo scale; for multi-client use a shared broadcaster or SQLite WAL + LISTEN/NOTIFY would be needed
 2. Light theme is functional but some deep-zinc utility classes (text-zinc-500 etc.) could be tuned further for contrast on paper background
 3. **Next round priorities**: (a) coherence profile editor (persist custom α–ε per entity), (b) signal detail dialog (click history rows → full plane JSON), (c) overview health heartbeat sparkline (RPC latency over time), (d) app source snapshot to /home/z/my-project/download/ for reset-resilience
+
+---
+Task ID: CRON-R5 (webDevReview round 5 — signal detail + heartbeat + snapshot)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; shipped signal detail dialog, RPC heartbeat sparklines, source snapshot, light-theme contrast fixes
+
+## CURRENT PROJECT STATUS
+Environment STABLE (5th consecutive round). App: 1,600 BHs, 220 signals, 101 chains, 5/6 RPC probes, lint clean, 0 console errors. Reset-resilience now solved via download/ snapshot.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Signal detail dialog** (`signal-detail.tsx`):
+   - SILENCE-log rows on Overview are now clickable → dialog with full gate arithmetic (C/Θ/margin/T 4-up), gate meter, facts grid (V(t), moat, limiting plane, e^M amplification), ±2 ledger context rows, gate formula block
+   - Verified: dialog "SILENCE … Whale 0x742d" opens with C=0.691 vs Θ=0.733, margin −0.041
+2. **FEATURE — RPC heartbeat sparklines** (`rpc-heartbeat.tsx`):
+   - Replaced static RPC probe list with rolling-latency tiles: each probe chain accumulates a 24-point latency window (15s polls), rendered as per-chain sparklines with tone tiers (green <800ms / amber <2.5s / rose beyond), min/max readouts, offline state
+   - First iteration used refs-in-render (lint error) then dataUpdatedAt-keyed query (didn't trigger) — final: self-contained useEffect+setInterval probe loop with functional state update
+   - Verified: 5/6 online tiles with Ethereum etc. rendering
+3. **FEATURE — Source snapshot for reset-resilience** (download/):
+   - `trion-app-source-20260824-2056.tar.gz` — 137 files (src/, prisma schema, configs), excludes node_modules/.next/db
+   - `RESTORE.md` — complete restore guide (untar → bun add js-sha3 → db:push → seed → live)
+4. **Styling polish**: nav-sweep underline animation (hover 0.6×, active 1×), light-theme contrast tuning (zinc-500/600 text, borders, card bgs, dialog overlay), unified :focus-visible rings (WCAG), table-row focus offsets
+5. **QA**: 0 console errors, 15 mobile buttons render, light mode screenshot verified, dark restored
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Heartbeat sparklines need ~2 polls (30s) before drawing — acceptable warmup; could persist to sessionStorage next round
+2. trion-core local clone may be stale vs GitHub if others push — re-clone on demand
+3. **Next round priorities**: (a) coherence profile editor (persist custom α–ε per entity), (b) sessionStorage persistence for heartbeat, (c) ANIMA news per-entity filtering, (d) auto-refresh snapshot script after each round
