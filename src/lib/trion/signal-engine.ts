@@ -85,7 +85,7 @@ const std = (arr: number[]): number => {
 
 export const computeSignalForEntity = async (
   beoIdOrId: string,
-  opts: { volatility?: number; profile?: string } = {},
+  opts: { volatility?: number; profile?: string; customWeights?: { alpha: number; beta: number; gamma: number; delta: number; epsilon: number } } = {},
 ): Promise<ComputedSignal | null> => {
   const entity = await db.entity.findUnique({
     where: { beoId: beoIdOrId },
@@ -162,7 +162,7 @@ export const computeSignalForEntity = async (
     conscious: k,
     anima: animaResult.anima,
   }
-  const coherenceResult = computeCoherence(planes, volatility, profile)
+  const coherenceResult = computeCoherence(planes, volatility, profile, opts.customWeights)
   const chainsSpanned = new Set(hashes.map(h => h.chainId)).size
   const moatResult = computeMoat({
     akashicDepth: entity.depth,

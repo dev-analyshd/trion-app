@@ -14,9 +14,11 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ExternalLink, Star, GitFork, AlertCircle } from 'lucide-react'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 export function AnimaView() {
+  const [keyword, setKeyword] = useState('')
   const news = useQuery({
     queryKey: ['anima-news'],
     queryFn: () => fetchJSON<AnimaNewsResponse>('/api/anima/news', 25000),
@@ -98,8 +100,23 @@ export function AnimaView() {
             {!n ? (
               <SkeletonGrid count={5} className="grid-cols-1" />
             ) : (
+              <>
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="Filter headlines (e.g. bitcoin, eth, sol)…"
+                  className="w-full max-w-sm rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs placeholder:text-zinc-600 focus:border-emerald-500/40"
+                  aria-label="Filter news by keyword"
+                />
+                <span className="shrink-0 text-[11px] text-zinc-600">
+                  {n.live.filter(x => !keyword || x.title.toLowerCase().includes(keyword.toLowerCase())).length} / {n.live.length} headlines
+                </span>
+              </div>
               <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
-                {n.live.map((item, i) => (
+                {n.live
+                  .filter(x => !keyword || x.title.toLowerCase().includes(keyword.toLowerCase()))
+                  .map((item, i) => (
                   <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
                     className="group flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:border-emerald-500/30">
                     <div className="mt-0.5 flex w-14 shrink-0 flex-col items-center">
@@ -126,6 +143,7 @@ export function AnimaView() {
                   </a>
                 ))}
               </div>
+              </>
             )}
           </Panel>
         </TabsContent>

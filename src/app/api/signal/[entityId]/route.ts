@@ -14,10 +14,26 @@ export async function GET(
   const volatility = url.searchParams.get('volatility')
     ? Number(url.searchParams.get('volatility'))
     : undefined
+  // Custom weights override: ?w=alpha,beta,gamma,delta,epsilon (server-validated)
+  let customWeights: { alpha: number; beta: number; gamma: number; delta: number; epsilon: number } | undefined
+  const wParam = url.searchParams.get('w')
+  if (wParam) {
+    const parts = wParam.split(',').map(Number)
+    if (parts.length === 5 && parts.every(v => Number.isFinite(v) && v >= 0 && v <= 1)) {
+      const sum = parts.reduce((a, b) => a + b, 0)
+      if (Math.abs(sum - 1) <= 0.02) {
+        customWeights = {
+          alpha: parts[0] / sum, beta: parts[1] / sum, gamma: parts[2] / sum,
+          delta: parts[3] / sum, epsilon: parts[4] / sum,
+        }
+      }
+    }
+  }
 
   try {
     const signal = await computeSignalForEntity(entityId, {
       profile, volatility: volatility ?? undefined,
+      customWeights,
     })
     if (!signal) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 })

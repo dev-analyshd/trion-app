@@ -333,3 +333,30 @@ Environment STABLE (5th consecutive round). App: 1,600 BHs, 220 signals, 101 cha
 1. Heartbeat sparklines need ~2 polls (30s) before drawing — acceptable warmup; could persist to sessionStorage next round
 2. trion-core local clone may be stale vs GitHub if others push — re-clone on demand
 3. **Next round priorities**: (a) coherence profile editor (persist custom α–ε per entity), (b) sessionStorage persistence for heartbeat, (c) ANIMA news per-entity filtering, (d) auto-refresh snapshot script after each round
+
+---
+Task ID: CRON-R6 (webDevReview round 6 — profile editor + filters + persistence)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; shipped coherence profile editor, ANIMA news filter, heartbeat persistence, fresh snapshot
+
+## CURRENT PROJECT STATUS
+Environment STABLE (6th consecutive round). App: 1,600 BHs, 221 signals, 101 chains, 5/6 RPC probes, lint clean, 0 console errors on fresh loads.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Coherence profile editor** (`profile-editor.tsx` + `/api/profile` + engine plumbing):
+   - Full α–ε weight editor with shadcn sliders, live Σ badge (±0.02 tolerance), Normalize (Σ→1) helper, Default reset
+   - Server validation endpoint: non-negative, ≤1 each, sum-normalized, balanced-entity preview
+   - Signal API extended with `?w=alpha,beta,gamma,delta,epsilon` param; computeCoherence accepts customWeights override (validated server-side before application)
+   - Per-entity persistence in localStorage (`trion-profile:<beoId>`); collapsible `<details>` editor in Coherence view with "custom active" badge in the control bar
+   - Verified in browser: editor opens, Apply & Save → "custom profile α=0.25…" badge appears, localStorage persisted
+2. **FEATURE — ANIMA news keyword filter**:
+   - Filter input + live count ("7 / 30 headlines" for "bitcoin") on the news stream; React-controlled input verified via native setter dispatch
+3. **FEATURE — Heartbeat sessionStorage persistence**:
+   - Rolling RPC latency window survives view switches (verified: `trion-rpc-heartbeat` = 529 chars in sessionStorage after navigating away and back)
+4. **Snapshot refreshed**: `trion-app-source-20260824-2105.tar.gz` (140 files incl. this round's 3 new components + profile API)
+5. **QA**: all views clean on fresh loads (transient HMR console artifacts from live-editing sessions only); mobile 15 buttons; lint clean; profile API round-trip validated
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Console errors observed only during dev HMR of edited files — no production impact; verify with fresh reloads
+2. **Next round priorities**: (a) archetype distribution view (12-archetype matrix from seed entities), (b) signal type breakdown donut on Overview, (c) BTCP route history analytics (route-type frequency + avg savings), (d) consider bundling snapshot refresh into the cron workflow

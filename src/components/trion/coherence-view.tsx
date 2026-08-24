@@ -13,6 +13,7 @@ import {
 } from './primitives'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ProfileEditor, loadCustomProfile, type CustomWeights } from './profile-editor'
 import { cn } from '@/lib/utils'
 
 const PROFILES = [
@@ -30,18 +31,27 @@ export function CoherenceView() {
   const [volatility, setVolatility] = useState(0.3)
   const [signal, setSignal] = useState<SignalResponse | null>(null)
   const [computing, setComputing] = useState(false)
+  const [customW, setCustomW] = useState<CustomWeights | null>(null)
 
   const beoId = selected ?? entities.data?.entities[0]?.beoId ?? null
+
+  // Load persisted custom profile when the entity changes
+  useEffect(() => {
+    setCustomW(loadCustomProfile(beoId))
+  }, [beoId])
 
   useEffect(() => {
     if (!beoId) return
     let cancelled = false
     const t = setTimeout(() => setComputing(true), 0)
+    const wParam = customW
+      ? `&w=${customW.alpha},${customW.beta},${customW.gamma},${customW.delta},${customW.epsilon}`
+      : ''
     fetchJSON<SignalResponse>(
-      `/api/signal/${beoId}?profile=${profile}&volatility=${volatility}`
+      `/api/signal/${beoId}?profile=${profile}&volatility=${volatility}${wParam}`
     ).then(s => { if (!cancelled) { setSignal(s); setComputing(false) } })
     return () => { cancelled = true; clearTimeout(t) }
-  }, [beoId, profile, volatility])
+  }, [beoId, profile, volatility, customW])
 
   const history = useQuery({
     queryKey: ['signal-history', beoId],
@@ -89,7 +99,29 @@ export function CoherenceView() {
           <span className="tabular font-mono text-xs text-emerald-400">{volatility.toFixed(2)}</span>
         </div>
         {computing && <Badge variant="outline" className="border-amber-500/30 text-amber-400">computing…</Badge>}
+        {customW && (
+          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+            custom profile α={customW.alpha.toFixed(2)} β={customW.beta.toFixed(2)} γ={customW.gamma.toFixed(2)}
+          </Badge>
+        )}
       </div>
+
+      {/* Profile editor (collapsible row) */}
+      <details className="group">
+        <summary className="flex cursor-pointer items-center gap-2 text-xs text-zinc-500 transition-colors hover:text-emerald-400 [&::-webkit-details-marker]:hidden">
+          <span className="rounded border border-zinc-700 px-1.5 py-0.5 font-mono text-[10px]">⚙</span>
+          Profile editor — tune α·β·γ·δ·ε weights {customW ? '(custom active)' : ''}
+          <span className="text-zinc-600 transition-transform group-open:rotate-90">▸</span>
+        </summary>
+        <div className="mt-3">
+          <ProfileEditor
+            beoId={beoId}
+            weights={customW ?? { alpha: signal?.planeWeights.alpha ?? 0.25, beta: signal?.planeWeights.beta ?? 0.30, gamma: signal?.planeWeights.gamma ?? 0.25, delta: signal?.planeWeights.delta ?? 0.10, epsilon: signal?.planeWeights.epsilon ?? 0.10 }}
+            onApply={(w) => setCustomW(w)}
+            onReset={() => setCustomW(null)}
+          />
+        </div>
+      </details>
 
       {!signal ? (
         <SkeletonGrid count={4} className="grid-cols-1 md:grid-cols-2" />

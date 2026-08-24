@@ -17,10 +17,20 @@ interface ProbeHistory {
   latencyMs: number
 }
 
+const SS_KEY = 'trion-rpc-heartbeat'
+
 export function RpcHeartbeat() {
   const [histories, setHistories] = useState<ProbeHistory[]>([])
 
   useEffect(() => {
+    // Restore rolling window from sessionStorage (survives view switches)
+    const restore = setTimeout(() => {
+      try {
+        const raw = sessionStorage.getItem(SS_KEY)
+        if (raw) setHistories(JSON.parse(raw) as ProbeHistory[])
+      } catch { /* ignore */ }
+    }, 0)
+
     let cancelled = false
     const probe = async () => {
       const h = await fetchJSON<HealthResponse>('/api/health')
@@ -38,12 +48,14 @@ export function RpcHeartbeat() {
             latencyMs: p.latencyMs,
           })
         }
-        return Array.from(map.values())
+        const next = Array.from(map.values())
+        try { sessionStorage.setItem(SS_KEY, JSON.stringify(next)) } catch { /* quota */ }
+        return next
       })
     }
     probe()
     const id = setInterval(probe, 15000)
-    return () => { cancelled = true; clearInterval(id) }
+    return () => { cancelled = true; clearInterval(id); clearTimeout(restore) }
   }, [])
 
   const onlineCount = histories.filter(h => h.online).length

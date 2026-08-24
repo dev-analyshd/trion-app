@@ -36,8 +36,9 @@ export const computeCoherence = (
   planes: PlaneInputs,
   volatility: number,
   profile = 'DEFAULT',
+  customWeights?: PlaneWeights,
 ): CoherenceResult => {
-  const w = WEIGHT_PROFILES[profile] ?? WEIGHT_PROFILES.DEFAULT
+  const w = customWeights ?? WEIGHT_PROFILES[profile] ?? WEIGHT_PROFILES.DEFAULT
   const weighted = {
     physical: w.alpha * planes.physical,
     mental: w.beta * planes.mental,
