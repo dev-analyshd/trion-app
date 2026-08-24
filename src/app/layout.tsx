@@ -1,53 +1,39 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import type { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
+import './globals.css'
+import { Toaster } from '@/components/ui/toaster'
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+  title: {
+    default: 'TRION Protocol — Behavioral Truth Infrastructure',
+    template: '%s · TRION Protocol',
   },
+  description:
+    'The verification layer for the age of synthetic everything. Five-plane behavioral coherence: C(t) = α·Φ + β·M + γ·Σ + δ·K + ε·A ≥ Θ(t). Zero-bridge BTCP across 101 chains and 16 VM families.',
+  keywords: ['TRION', 'BTCP', 'behavioral coherence', 'zero-bridge', 'oracle', 'DW-BFT', 'Akashic Index'],
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
+    title: 'TRION Protocol — Behavioral Truth Infrastructure',
+    description: 'Truth emits only when all five planes of reality are coherent. When any plane fails: silence.',
+    type: 'website',
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
-};
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: '#0a0a0b',
+  width: 'device-width',
+  initialScale: 1,
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
+      <body className={`${inter.variable} ${mono.variable} font-sans antialiased bg-zinc-950 text-zinc-100`}>
         {children}
         <Toaster />
       </body>
     </html>
-  );
+  )
 }

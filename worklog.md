@@ -171,3 +171,38 @@ Stage Summary:
 - HONESTY PATTERNS: bootstrap values disclosed everywhere (Σ=0.25, K=0.10, A=0.10), COLD_START SILENCE, e^(−0.0001D) classical→living-security handoff, "never invented data" crawler fallbacks, mainnet runbook self-declares NOT ready (D(t) 18.3%, tainted deployer key, audit required).
 - KEY DISCREPANCIES FOUND: spec BEO threshold 0.85 vs code 0.75; Θ_max 0.90 spec vs 0.92 code; Go DualStrandSign missing XOR-NOT antisense transform; two BH payload layouts (93-byte whitepaper vs 420-byte BTCP formal spec); SVM escrow locks entire wallet balance; frontend README drift + hook duplication; TrionSDK WASM helpers reference exports absent from shipped WAT; app.py alerts proxy port mismatch (6000 vs 5001 default).
 - REPO CLONED AND FULLY READ AT: /home/z/trion-core (available for any follow-up work)
+
+---
+Task ID: CRON-R1 (webDevReview round 1 — post-reset rebuild)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — found environment fully reset, rebuilt everything + new features
+
+## CURRENT PROJECT STATUS
+
+**CRITICAL FINDING**: The sandbox environment was reset between cycles — ALL project files were wiped (src/lib/trion/, src/components/trion/, all API routes, Prisma TRION schema, seeded DB, js-sha3 dep, and the /home/z/trion-core clone). The worklog also lost the T1–T4 build entries (this file was restored to its clone-session state). The GitHub push (c9bf7e4) was SAFE — trion-core re-cloned from GitHub with all gap fixes (zk-circuits, Go antisense, spec alignment) confirmed present.
+
+**Action taken**: Complete rebuild of the TRION app from scratch, with all previous bug fixes baked in, PLUS new features for this round.
+
+## COMPLETED THIS ROUND
+
+1. **Full rebuild** (all previous fixes applied):
+   - Prisma schema (12 models, commitsLast90d/contributors have defaults — the FK/validation bugs from last round fixed at birth)
+   - Engine: constants, behavioral-hash (golden vector `7060238a…` re-verified), entropy, manipulation, dwbft, coherence, btcp, anima, chains (101 chains — FIXED duplicate chain-id bug: Klaytn 8453→8217 collided with Base), signal-engine (timeGapsSec fix included), seed (1,600 BHs seeded)
+   - 12 API routes incl. fixed escrow FK (routeId→id) and validator model vectors
+   - Frontend: 8 views rebuilt, lint clean
+2. **NEW FEATURES this round**:
+   - `/api/signals/history` — signal publication ledger endpoint with emitted/silenced/silenceRate stats
+   - Overview: live **Coherence History sparkline** (C(t) across recent publications) + **SILENCE Log** ("the honesty ledger" — entities that failed the gate with their limiting plane)
+   - Coherence Engine: per-entity **Publication History panel** with sparkline + emitted/silenced counters
+   - Primitives: reusable `Sparkline` and `SilenceLogRow` components
+3. **Styling detail improvements**: hover states on StatTile/MF cards/PQC cards/falsifiability cards/language matrix, threshold tick on gauges
+4. **Live data re-verified**: 36 news articles (live RSS), 13 SEC filings (live EDGAR), 8 GitHub repos (live fetch — 3 rate-limited, honest cached fallback), 5/6 RPC probes online
+5. **QA (agent-browser)**: all 8 views render, signal computation works (SILENCE + NOMINAL gating verified), BTCP route simulator (SINGLE_CHAIN score computed), sparkline + silence log display with generated history, mobile menu at 390px, ZERO console errors, lint clean
+6. Re-cloned /home/z/trion-core from GitHub (c9bf7e4 confirmed)
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+
+1. **Environment instability is the #1 risk** — the reset destroyed local state. Mitigation: the trion-core repo is safe on GitHub; consider adding the TRION app source to a GitHub repo too (needs user request — do NOT push my-project without instruction since only trion-core was authorized)
+2. **GitHub API rate limit** (shared sandbox IP): ~40% of repo fetches fail; cached-real-data fallback works honestly. Optional env: GITHUB_TOKEN raises limit
+3. **Signal history cold-starts** after every reset (signals table empty until Coherence Engine is visited). Consider seeding historical signals in seed.ts next round
+4. **Next round priorities**: (a) seed synthetic-but-realistic signal history at boot, (b) add E2E BTCP flow button on Overview, (c) entity detail drill-down (clickable entity board rows), (d) BRT phase visual clock, (e) persist app source to a git remote for reset-resilience (pending user approval)

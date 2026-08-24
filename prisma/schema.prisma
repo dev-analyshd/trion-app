@@ -1,8 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// TRION Protocol — Behavioral Truth Infrastructure
+// Prisma schema (SQLite) — Akashic Index + BTCP ledger
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +10,206 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ── L2: Akashic chain registry (100+ chains across every VM family) ─────────
+model Chain {
+  id            Int      @id // TRION internal chain id (stable)
+  name          String   @unique
+  nativeChainId Int
+  vm            String // EVM | SVM | COSMOS | MOVE | UTXO | TVM | NEAR | STARKNET | PVM | WASM | XRP | CARDANO | HEDERA | ALGORAND
+  category      String // L1 | L2 | L3 | PARACHAIN | ROLLUP
+  rpcs          String // JSON array of public RPC endpoints
+  explorer      String
+  nativeToken   String
+  finalitySec   Float
+  avgGasUsd     Float
+  blockTimeSec  Float
+  integrated    Boolean @default(true)
+  status        String  @default("ACTIVE") // ACTIVE | DEGRADED | OFFLINE | HOSTILE | OOA
+  lastBlock     Int     @default(0)
+  lastCheckedAt DateTime?
+  nlScore       Float   @default(0.5)
+  createdAt     DateTime @default(now())
 }
 
-model Post {
+// ── L0.2: Behavioral Entity Object ───────────────────────────────────────────
+model Entity {
+  id         String   @id @default(cuid())
+  beoId      String   @unique // 32-byte hex BEO id = SHA3-256(normalized identifier)
+  label      String
+  kind       String   @default("PROTOCOL") // PROTOCOL | WALLET | TOKEN | AGENT | NATION
+  address    String?  @unique
+  chains     String   @default("[]") // JSON array of chain ids
+  depth      Int      @default(0) // D(t)
+  archetype  String   @default("ORGANIC_GROWTH")
+  coherence  Float    @default(0)
+  trustTier  String   @default("UNTRUSTED")
+  bhCount    Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  hashes     BehavioralHash[]
+  signals    Signal[]
+  intents    BtcpIntent[]
+}
+
+// ── L0.1: Behavioral Hash ledger (93-byte canonical, dual-strand SHA3-256) ──
+model BehavioralHash {
+  id             Int      @id @default(autoincrement())
+  entityId       String
+  entity         Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  senseHex       String
+  antisenseHex   String
+  complementHex  String
+  payloadHex     String
+  eventType      Int
+  eventTypeName  String
+  magnitudeNorm  Float
+  chainId        Int
+  blockNumber    Int
+  blockHash      String
+  txHash         String?
+  timestamp      DateTime
+  valid          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([entityId, timestamp])
+  @@index([chainId])
+}
+
+// ── L5: Signal publication ledger ────────────────────────────────────────────
+model Signal {
+  id             String   @id @default(cuid())
+  entityId       String
+  entity         Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  type           String
+  status         String // NOMINAL | WARN | SILENCE | COLLAPSE
+  coherence      Float
+  threshold      Float
+  margin         Float
+  tValue         Float
+  moat           Float
+  planes         String
+  planeWeights   String
+  ci95           String
+  limitingPlane  String?
+  volatility     Float
+  emitted        Boolean
+  createdAt      DateTime @default(now())
+
+  @@index([entityId, createdAt])
+  @@index([type])
+}
+
+// ── BTCP: Intent → Route → Escrow lifecycle ─────────────────────────────────
+model BtcpIntent {
+  id          String   @id @default(cuid())
+  intentHash  String   @unique
+  entityId    String
+  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  action      String // SWAP | TRANSFER | LIQUIDITY | STAKE | BORROW
+  assetIn     String
+  assetOut    String
+  magnitude   Float // USD
+  sourceChain Int
+  destChain   Int
+  maxGasUsd   Float    @default(50)
+  minNl       Float    @default(0.3)
+  deadlineMin Int      @default(60)
+  status      String   @default("PENDING")
+  routeType   String?
+  createdAt   DateTime @default(now())
+  routes      BtcpRoute[]
+}
+
+model BtcpRoute {
+  id               String   @id @default(cuid())
+  routeId          String   @unique
+  intentId         String
+  intent           BtcpIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  routeType        String
+  anchorChain      Int
+  executionChain   Int
+  btcpScore        Float
+  gasCostUsd       Float
+  gasSavedPct      Float
+  beoContinuity    Float
+  ccCoherence      Float
+  mfScore          Float
+  finalityConf     Float
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+  escrow           BtcpEscrow?
+}
+
+model BtcpEscrow {
+  id            String    @id @default(cuid())
+  escrowId      String    @unique
+  routeId       String    @unique
+  route         BtcpRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  amountUsd     Float
+  state         String    @default("HOLDING")
+  lockBlock     Int
+  timeoutBlocks Int       @default(3600)
+  coherenceAtRelease Float?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// ── L4: Validator mesh (DW-BFT) ─────────────────────────────────────────────
+model Validator {
+  id              String   @id @default(cuid())
+  name            String
+  region          String
+  continent       String
+  stake           Float
+  diversityWeight Float    @default(0.5)
+  effectiveStake  Float    @default(0)
+  uptime          Float    @default(0.99)
+  status          String   @default("ACTIVE")
+  joinedAt        DateTime @default(now())
+}
+
+// ── L3: ANIMA off-chain intelligence (live external data) ───────────────────
+model AnimaNews {
+  id          String   @id @default(cuid())
+  title       String
+  source      String
+  url         String   @unique
+  sentiment   Float
+  credibility Float
+  entityHint  String?
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+}
+
+model AnimaGithub {
+  id           String   @id @default(cuid())
+  repo         String   @unique
+  stars        Int
+  forks        Int
+  openIssues   Int
+  commitsLast90d Int    @default(0)
+  contributors Int      @default(0)
+  sentiment    Float
+  updatedAt    DateTime @default(now())
+}
+
+model AnimaSec {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  company   String
+  cik       String
+  form      String
+  filedAt   DateTime
+  url       String   @unique
+  sentiment Float
+  summary   String
+}
+
+// ── L4.2: Conscious plane annotations ───────────────────────────────────────
+model Annotation {
+  id         String   @id @default(cuid())
+  entityId   String
+  annotator  String
+  kScore     Float
+  rationale  String
+  createdAt  DateTime @default(now())
 }
