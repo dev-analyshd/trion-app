@@ -1,0 +1,726 @@
+     1→/**
+     2→ * Governance Pages - Overview, AWA, Gratitude, Love, Falsifiability, Slashing, Unknown Provision,
+     3→ * Adaptive Consensus, Right to Invisibility, Elder Wisdom
+     4→ */
+     5→'use client';
+     6→
+     7→import { Card, StatCard, ProgressBar, Badge, DataTable, KVList, EmptyState, Tag } from '../components/ui';
+     8→import { useAPI } from '../lib/hooks';
+     9→import { fetchAPI, fmt, pct, tfmt, dtfmt, truncate, hex, compact, statusColor, cleanText } from '../lib/api';
+    10→import * as Icons from 'lucide-react';
+    11→
+    12→// ════════════════════════════════════════════════════════════════════════════
+    13→// GOVERNANCE OVERVIEW
+    14→// ════════════════════════════════════════════════════════════════════════════
+    15→
+    16→export function GovernancePage() {
+    17→  const { data: init } = useAPI('/api/v1/governance/init', 30000);
+    18→  const { data: awa } = useAPI('/api/v1/governance/awa', 15000);
+    19→  const { data: geo } = useAPI('/api/v1/governance/geo', 30000);
+    20→
+    21→  return (
+    22→    <div className="space-y-6">
+    23→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    24→        <StatCard label="AWA Conditions" value={`${Object.values(awa?.conditions || {}).filter((c: any) => c?.met).length}/4`} color="green" />
+    25→        <StatCard label="Geographic Continents" value={`${geo?.continent_count || 0}/4`} color={geo?.continents_ok ? 'green' : 'amber'} />
+    26→        <StatCard label="Governance Modules" value={fmt(init?.governance_modules?.length)} color="blue" />
+    27→        <StatCard label="Bootstrap Weight" value={pct(awa?.bootstrap_weight, 3)} color={awa?.bootstrap_weight < 0.5 ? 'green' : 'amber'} />
+    28→      </div>
+    29→
+    30→      <Card title="AWA Ceremony - 4 Conditions" live>
+    31→        <div className="space-y-3">
+    32→          {Object.entries(awa?.conditions || {}).map(([name, c]: any) => (
+    33→            <div key={name} className="flex items-center justify-between">
+    34→              <div>
+    35→                <div className="text-sm font-medium capitalize">{name.replace(/_/g, ' ')}</div>
+    36→                <div className="text-xs text-muted-foreground">value: {c.value?.toFixed(4)} / threshold: {c.threshold?.toFixed(4)}</div>
+    37→              </div>
+    38→              <Badge status={c.met ? 'MET' : 'PENDING'} />
+    39→            </div>
+    40→          ))}
+    41→        </div>
+    42→      </Card>
+    43→
+    44→      <Card title="Governance Modules" live>
+    45→        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+    46→          {(init?.governance_modules || []).map((m: any) => (
+    47→            <div key={m.name || m.id} className="p-3 rounded-lg border border-border bg-card">
+    48→              <div className="font-semibold text-sm">{m.name || m.id}</div>
+    49→              <div className="text-xs text-muted-foreground mt-1">{m.description || m.status || '-'}</div>
+    50→            </div>
+    51→          ))}
+    52→        </div>
+    53→      </Card>
+    54→
+    55→      <Card title="Geographic Distribution" live>
+    56→        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2">
+    57→          {['AF', 'AN', 'AS', 'EU', 'NA', 'OC', 'SA'].map(c => {
+    58→            const count = geo?.continent_breakdown?.[c] || 0;
+    59→            return (
+    60→              <div key={c} className={`p-3 rounded text-center border ${count > 0 ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/30 border-border'}`}>
+    61→                <div className="text-sm font-semibold">{c}</div>
+    62→                <div className="text-lg font-mono">{count}</div>
+    63→              </div>
+    64→            );
+    65→          })}
+    66→        </div>
+    67→      </Card>
+    68→    </div>
+    69→  );
+    70→}
+    71→
+    72→// ════════════════════════════════════════════════════════════════════════════
+    73→// AWA CEREMONY
+    74→// ════════════════════════════════════════════════════════════════════════════
+    75→
+    76→export function AWAPage() {
+    77→  const { data: ceremony } = useAPI('/api/v1/governance/ceremony', 15000);
+    78→  const { data: awa } = useAPI('/api/v1/governance/awa', 15000);
+    79→
+    80→  return (
+    81→    <div className="space-y-6">
+    82→      <Card title="AWA Ceremony - Genesis 4-Party Bootstrap" live>
+    83→        <div className="text-center py-4">
+    84→          <div className="text-3xl font-bold">{ceremony?.ceremony_id || '-'}</div>
+    85→          <div className="text-sm text-muted-foreground mt-2">{ceremony?.description || '-'}</div>
+    86→          <div className="mt-3">
+    87→            <Badge status={ceremony?.completed ? 'COMPLETED' : 'IN PROGRESS'} />
+    88→          </div>
+    89→        </div>
+    90→      </Card>
+    91→
+    92→      <Card title="Ceremony Steps" live>
+    93→        <div className="space-y-2">
+    94→          {(ceremony?.ceremony_steps || []).map((s: any, i: number) => (
+    95→            <div key={i} className="flex items-center gap-3 p-2 rounded border border-border">
+    96→              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${s.completed ? 'bg-green-500 text-white' : 'bg-muted'}`}>
+    97→                {s.completed ? '✓' : i + 1}
+    98→              </div>
+    99→              <div className="flex-1">
+   100→                <div className="text-sm font-medium">{s.name || s.step || `Step ${i + 1}`}</div>
+   101→                <div className="text-xs text-muted-foreground">{s.description || ''}</div>
+   102→              </div>
+   103→              <Badge status={s.completed ? 'DONE' : 'PENDING'} />
+   104→            </div>
+   105→          ))}
+   106→        </div>
+   107→      </Card>
+   108→
+   109→      <Card title="Bootstrap Decay" live>
+   110→        <KVList items={[
+   111→          ['Bootstrap weight', pct(awa?.bootstrap_weight, 3)],
+   112→          ['Akashic depth', fmt(awa?.akashic_depth)],
+   113→          ['Decay rate lambda', '0.0001'],
+   114→          ['Formula', 'bootstrap_weight = e^(-lambda * D)'],
+   115→        ]} />
+   116→      </Card>
+   117→    </div>
+   118→  );
+   119→}
+   120→
+   121→// ════════════════════════════════════════════════════════════════════════════
+   122→// GRATITUDE PROTOCOL
+   123→// ════════════════════════════════════════════════════════════════════════════
+   124→
+   125→export function GratitudePage() {
+   126→  const { data: grad } = useAPI('/api/v1/governance/gratitude', 15000);
+   127→
+   128→  return (
+   129→    <div className="space-y-6">
+   130→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   131→        <StatCard label="Gratitude Score" value={(grad?.gratitude_score || 0).toFixed(2)} color="green" />
+   132→        <StatCard label="Threshold" value={(grad?.threshold || 1.0).toFixed(2)} />
+   133→        <StatCard label="Condition Met" value={grad?.condition_met ? 'YES' : 'NO'} color={grad?.condition_met ? 'green' : 'amber'} />
+   134→        <StatCard label="Events (30d)" value={fmt(grad?.events_30d?.length)} color="blue" />
+   135→      </div>
+   136→
+   137→      <Card title="Gratitude Protocol - Value_given / Value_received >= 1" live>
+   138→        <p className="text-sm text-muted-foreground mb-4">{grad?.description || 'Loading...'}</p>
+   139→        <div className="text-center py-4">
+   140→          <div className="text-5xl font-bold text-green-500">{(grad?.gratitude_score || 0).toFixed(2)}</div>
+   141→          <div className="text-sm text-muted-foreground mt-2">gratitude score ({'>='} 1.0 required)</div>
+   142→        </div>
+   143→        <ProgressBar value={grad?.gratitude_score || 0} max={2} color="green" label="Score vs. target" showValue />
+   144→      </Card>
+   145→
+   146→      <Card title="Recent Gratitude Events (30d)">
+   147→        <DataTable
+   148→          headers={['Time', 'Entity', 'Type', 'Amount']}
+   149→          rows={(grad?.events_30d || []).map((e: any) => [
+   150→            dtfmt(e.timestamp),
+   151→            hex(e.entity_id, 12),
+   152→            e.type || '-',
+   153→            fmt(e.amount),
+   154→          ])}
+   155→          emptyMessage="No recent events"
+   156→        />
+   157→      </Card>
+   158→    </div>
+   159→  );
+   160→}
+   161→
+   162→// ════════════════════════════════════════════════════════════════════════════
+   163→// LOVE PROTOCOL
+   164→// ════════════════════════════════════════════════════════════════════════════
+   165→
+   166→export function LovePage() {
+   167→  const { data: globalLove } = useAPI('/api/v1/love/global', 15000);
+   168→
+   169→  return (
+   170→    <div className="space-y-6">
+   171→      <Card title="Love Protocol - F Coefficient in M_moat = D - Q - R - X - F - N" live>
+   172→        <p className="text-sm text-muted-foreground mb-4">
+   173→          F = min(public_good_charter, indigenous_knowledge, right_to_invisibility, gratitude_protocol, elder_wisdom, unknown_unknown).
+   174→          If any pillar = 0, F = 0 and the moat collapses.
+   175→        </p>
+   176→        <div className="text-center py-4">
+   177→          <div className="text-5xl font-bold text-pink-500">{(globalLove?.global_love_index || 1).toFixed(4)}</div>
+   178→          <div className="text-sm text-muted-foreground mt-2">global love index</div>
+   179→        </div>
+   180→      </Card>
+   181→
+   182→      <Card title="6 Pillars of F">
+   183→        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+   184→          {[
+   185→            { name: 'Public Good Charter', target: '>= 15% revenue', icon: '🏛️' },
+   186→            { name: 'Indigenous Knowledge', target: 'interface respect', icon: '🌍' },
+   187→            { name: 'Right to Invisibility', target: 'petition enforcement', icon: '👁️‍🗨️' },
+   188→            { name: 'Gratitude Protocol', target: 'reciprocity', icon: '🙏' },
+   189→            { name: 'Elder Wisdom', target: '3* stake weight', icon: '👑' },
+   190→            { name: 'Unknown-Unknown Provision', target: '>= 10% reserve', icon: '❓' },
+   191→          ].map(p => (
+   192→            <div key={p.name} className="p-3 rounded-lg border border-border bg-card">
+   193→              <div className="text-2xl mb-1">{p.icon}</div>
+   194→              <div className="font-semibold text-sm">{p.name}</div>
+   195→              <div className="text-xs text-muted-foreground">{p.target}</div>
+   196→            </div>
+   197→          ))}
+   198→        </div>
+   199→      </Card>
+   200→
+   201→      <Card title="Distribution" live>
+   202→        <DataTable
+   203→          headers={['Tier', 'Score Range', 'Count']}
+   204→          rows={Object.entries(globalLove?.distribution || {}).map(([tier, count]: any) => [
+   205→            tier, '-', fmt(count),
+   206→          ])}
+   207→          emptyMessage="Loading distribution..."
+   208→        />
+   209→      </Card>
+   210→    </div>
+   211→  );
+   212→}
+   213→
+   214→// ════════════════════════════════════════════════════════════════════════════
+   215→// FALSIFIABILITY
+   216→// ════════════════════════════════════════════════════════════════════════════
+   217→
+   218→export function FalsifiabilityPage() {
+   219→  const { data: fals } = useAPI('/api/v1/falsifiability', 30000);
+   220→
+   221→  return (
+   222→    <div className="space-y-6">
+   223→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   224→        <StatCard label="Total Conditions" value={fmt(fals?.conditions?.length)} color="blue" />
+   225→        <StatCard label="Passing" value={fmt(fals?.summary?.passing || fals?.conditions?.filter((c: any) => c.status === 'PASSING').length)} color="green" />
+   226→        <StatCard label="Monitoring" value={fmt(fals?.summary?.monitoring || fals?.conditions?.filter((c: any) => c.status === 'MONITORING').length)} color="amber" />
+   227→        <StatCard label="Conjecture" value={fmt(fals?.summary?.conjecture || fals?.conditions?.filter((c: any) => c.status === 'CONJECTURE').length)} color="purple" />
+   228→      </div>
+   229→
+   230→      <Card title="15 Falsifiability Conditions (Karl Popper-inspired)" live>
+   231→        <p className="text-sm text-muted-foreground mb-4">{cleanText(fals?.disclosure) || 'Loading...'}</p>
+   232→        <DataTable
+   233→          headers={['ID', 'Claim', 'Status', 'Sample Size', 'Last Check']}
+   234→          rows={(fals?.conditions || []).map((c: any) => [
+   235→            <Tag color="blue">{c.id}</Tag>,
+   236→            c.claim,
+   237→            <Badge status={c.status} />,
+   238→            fmt(c.sample_size),
+   239→            dtfmt(c.last_check),
+   240→          ])}
+   241→          emptyMessage="Loading conditions..."
+   242→        />
+   243→      </Card>
+   244→
+   245→      <Card title="Live Evidence Summary">
+   246→        <p className="text-sm">{fals?.live_evidence || '-'}</p>
+   247→      </Card>
+   248→    </div>
+   249→  );
+   250→}
+   251→
+   252→// ════════════════════════════════════════════════════════════════════════════
+   253→// SLASHING CONDITIONS
+   254→// ════════════════════════════════════════════════════════════════════════════
+   255→
+   256→export function SlashingPage() {
+   257→  const { data: slash } = useAPI('/api/v1/governance/slashing/conditions', 30000);
+   258→
+   259→  return (
+   260→    <div className="space-y-6">
+   261→      <Card title="Slashing Conditions - 5 Whitepaper-Mandated Triggers" live>
+   262→        <p className="text-sm text-muted-foreground mb-4">{slash?.whitepaper_ref || 'Loading...'}</p>
+   263→        <div className="space-y-3">
+   264→          {(slash?.slashing_conditions || []).map((c: any) => (
+   265→            <div key={c.id || c.name} className="p-3 rounded-lg border border-red-500/30 bg-red-500/5">
+   266→              <div className="flex items-center justify-between mb-1">
+   267→                <span className="font-semibold text-sm">{c.name || c.id}</span>
+   268→                <Badge status="CRITICAL" />
+   269→              </div>
+   270→              <div className="text-xs text-muted-foreground">{c.description || c.reason}</div>
+   271→              {c.penalty_pct && (
+   272→                <div className="text-xs mt-1">Penalty: {(c.penalty_pct * 100).toFixed(0)}% of stake</div>
+   273→              )}
+   274→            </div>
+   275→          ))}
+   276→        </div>
+   277→      </Card>
+   278→
+   279→      <Card title="Dispute Resolution">
+   280→        <p className="text-sm">{slash?.dispute_resolution || '-'}</p>
+   281→      </Card>
+   282→
+   283→      <Card title="Engine Summary">
+   284→        <KVList items={[
+   285→          ['Total conditions', fmt(slash?.slashing_conditions?.length)],
+   286→          ['Dispute resolution', slash?.dispute_resolution || 'binding arbitration'],
+   287→        ]} />
+   288→      </Card>
+   289→    </div>
+   290→  );
+   291→}
+   292→
+   293→// ════════════════════════════════════════════════════════════════════════════
+   294→// UNKNOWN PROVISION
+   295→// ════════════════════════════════════════════════════════════════════════════
+   296→
+   297→export function UnknownProvisionPage() {
+   298→  const { data: prov } = useAPI('/api/v1/governance/unknown_provision', 30000);
+   299→
+   300→  return (
+   301→    <div className="space-y-6">
+   302→      <Card title="Unknown-Unknown Provision - 10% Revenue Reserve" live>
+   303→        <p className="text-sm text-muted-foreground mb-4">{prov?.whitepaper || 'Loading...'}</p>
+   304→        <div className="text-center py-4">
+   305→          <div className="text-5xl font-bold text-amber-500">10%</div>
+   306→          <div className="text-sm text-muted-foreground mt-2">of all revenue reserved for unknown failures</div>
+   307→        </div>
+   308→      </Card>
+   309→
+   310→      <Card title="Provision Categories">
+   311→        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+   312→          {(prov?.categories || []).map((c: any) => (
+   313→            <div key={c.name || c.id} className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+   314→              <div className="font-semibold text-sm">{c.name || c.id}</div>
+   315→              <div className="text-xs text-muted-foreground mt-1">{c.description || ''}</div>
+   316→            </div>
+   317→          ))}
+   318→        </div>
+   319→      </Card>
+   320→
+   321→      <Card title="Honest Disclosure">
+   322→        <p className="text-sm">{cleanText(prov?.honest_disclosure) || '-'}</p>
+   323→      </Card>
+   324→    </div>
+   325→  );
+   326→}
+   327→
+   328→// ════════════════════════════════════════════════════════════════════════════
+   329→// ADAPTIVE CONSENSUS
+   330→// ════════════════════════════════════════════════════════════════════════════
+   331→
+   332→export function AdaptiveConsensusPage() {
+   333→  return (
+   334→    <div className="space-y-6">
+   335→      <Card title="Adaptive Consensus Parameter Recommendations">
+   336→        <p className="text-sm text-muted-foreground mb-4">
+   337→          TRION emits non-binding consensus parameter recommendations to consuming chains based on observed
+   338→          behavioral patterns. Recommendations cover: block_size_limit, gas_limit, finality_threshold,
+   339→          slashing_threshold_pct, validator_set_size.
+   340→        </p>
+   341→        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+   342→          {[
+   343→            { name: 'block_size_limit', icon: '📦', desc: 'gas per block' },
+   344→            { name: 'gas_limit', icon: '⛽', desc: 'MEV-aware cap' },
+   345→            { name: 'finality_threshold', icon: '🔒', desc: 'Sigma-driven confirmations' },
+   346→            { name: 'slashing_threshold_pct', icon: '⚔️', desc: 'MF-driven severity' },
+   347→            { name: 'validator_set_size', icon: '👥', desc: 'HHI-driven expansion' },
+   348→          ].map(p => (
+   349→            <div key={p.name} className="p-3 rounded-lg border border-border bg-card text-center">
+   350→              <div className="text-2xl mb-1">{p.icon}</div>
+   351→              <div className="text-xs font-mono font-semibold">{p.name}</div>
+   352→              <div className="text-xs text-muted-foreground mt-1">{p.desc}</div>
+   353→            </div>
+   354→          ))}
+   355→        </div>
+   356→      </Card>
+   357→
+   358→      <Card title="Recommendation Algorithm">
+   359→        <div className="space-y-3 text-sm">
+   360→          <div>
+   361→            <div className="font-semibold">Block Size</div>
+   362→            <code className="text-xs">recommended = DEFAULT * (2 * Sigma) * (1 - 5 * MF)</code>
+   363→          </div>
+   364→          <div>
+   365→            <div className="font-semibold">Gas Limit</div>
+   366→            <code className="text-xs">penalty = max(0.5, 1 - 10 * (MEV - 0.005)) when MEV {'>'} 0.5%</code>
+   367→          </div>
+   368→          <div>
+   369→            <div className="font-semibold">Finality Threshold</div>
+   370→            <code className="text-xs">recommended = 32 * (1 + 4 * max(0, 0.5 - Sigma)) when Sigma {'<'} 0.5</code>
+   371→          </div>
+   372→          <div>
+   373→            <div className="font-semibold">Slashing</div>
+   374→            <code className="text-xs">recommended = 10% + 5 * MF when MF {'>'} 5%</code>
+   375→          </div>
+   376→          <div>
+   377→            <div className="font-semibold">Validator Set</div>
+   378→            <code className="text-xs">recommended = max(MIN, validator_count * 2) when HHI {'>'} 2500</code>
+   379→          </div>
+   380→        </div>
+   381→      </Card>
+   382→    </div>
+   383→  );
+   384→}
+   385→
+   386→// ════════════════════════════════════════════════════════════════════════════
+   387→// RIGHT TO INVISIBILITY
+   388→// ════════════════════════════════════════════════════════════════════════════
+   389→
+   390→export function RightToInvisibilityPage() {
+   391→  return (
+   392→    <div className="space-y-6">
+   393→      <Card title="Right to Invisibility - Privacy Petition Enforcement">
+   394→        <p className="text-sm text-muted-foreground mb-4">
+   395→          Any entity may petition for "invisibility" - the right to have their behavioral data excluded from
+   396→          TRION's public analytics. The BH ledger remains append-only; invisibility flags the entity so public
+   397→          API responses exclude their data while internal anomaly detection continues.
+   398→        </p>
+   399→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   400→          <div className="p-3 rounded-lg border border-border text-center">
+   401→            <div className="text-2xl mb-1">📋</div>
+   402→            <div className="text-sm font-semibold">Submit</div>
+   403→            <div className="text-xs text-muted-foreground">Petition with proof</div>
+   404→          </div>
+   405→          <div className="p-3 rounded-lg border border-border text-center">
+   406→            <div className="text-2xl mb-1">🔍</div>
+   407→            <div className="text-sm font-semibold">Verify</div>
+   408→            <div className="text-xs text-muted-foreground">Cryptographic identity</div>
+   409→          </div>
+   410→          <div className="p-3 rounded-lg border border-border text-center">
+   411→            <div className="text-2xl mb-1">🚫</div>
+   412→            <div className="text-sm font-semibold">Enforce</div>
+   413→            <div className="text-xs text-muted-foreground">Exclude from public</div>
+   414→          </div>
+   415→          <div className="p-3 rounded-lg border border-border text-center">
+   416→            <div className="text-2xl mb-1">📜</div>
+   417→            <div className="text-sm font-semibold">Audit</div>
+   418→            <div className="text-xs text-muted-foreground">All petitions logged</div>
+   419→          </div>
+   420→        </div>
+   421→      </Card>
+   422→
+   423→      <Card title="Petition Lifecycle">
+   424→        <div className="flex items-center justify-between gap-2">
+   425→          {['PENDING', 'APPROVED', 'REVOKED'].map((s, i) => (
+   426→            <div key={s} className="flex-1 p-3 rounded border-2 border-border text-center">
+   427→              <div className="text-xs font-semibold">{s}</div>
+   428→            </div>
+   429→          ))}
+   430→        </div>
+   431→      </Card>
+   432→    </div>
+   433→  );
+   434→}
+   435→
+   436→// ════════════════════════════════════════════════════════════════════════════
+   437→// ELDER WISDOM
+   438→// ════════════════════════════════════════════════════════════════════════════
+   439→
+   440→export function ElderWisdomPage() {
+   441→  return (
+   442→    <div className="space-y-6">
+   443→      <Card title="Elder Wisdom Protocol - Tenured Annotator Influence">
+   444→        <p className="text-sm text-muted-foreground mb-4">
+   445→          Long-tenured annotators (elders) provide cultural context that influences algorithmic scoring.
+   446→          Elders cannot override the 3-of-5 majority requirement - they have 3* stake weight within it.
+   447→        </p>
+   448→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   449→          <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/5 text-center">
+   450→            <div className="text-2xl mb-1">⏱️</div>
+   451→            <div className="text-sm font-semibold">12 months</div>
+   452→            <div className="text-xs text-muted-foreground">min tenure</div>
+   453→          </div>
+   454→          <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/5 text-center">
+   455→            <div className="text-2xl mb-1">📈</div>
+   456→            <div className="text-sm font-semibold">{'>='} 65%</div>
+   457→            <div className="text-xs text-muted-foreground">prediction accuracy</div>
+   458→          </div>
+   459→          <div className="p-3 rounded-lg border border-purple-500/30 bg-purple-500/5 text-center">
+   460→            <div className="text-2xl mb-1">⚡</div>
+   461→            <div className="text-sm font-semibold">3* stake</div>
+   462→            <div className="text-xs text-muted-foreground">weight multiplier</div>
+   463→          </div>
+   464→          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-center">
+   465→            <div className="text-2xl mb-1">🗳️</div>
+   466→            <div className="text-sm font-semibold">2/3</div>
+   467→            <div className="text-xs text-muted-foreground">elder vote quorum</div>
+   468→          </div>
+   469→        </div>
+   470→      </Card>
+   471→
+   472→      <Card title="Elder Admission Criteria">
+   473→        <div className="space-y-2 text-sm">
+   474→          <div className="flex items-center gap-2">
+   475→            <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   476→            <span>Minimum 12 months continuous active service</span>
+   477→          </div>
+   478→          <div className="flex items-center gap-2">
+   479→            <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   480→            <span>Above-median prediction accuracy ({'>='} 65%)</span>
+   481→          </div>
+   482→          <div className="flex items-center gap-2">
+   483→            <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   484→            <span>No regulatory-capture flags (ACP clean record)</span>
+   485→          </div>
+   486→          <div className="flex items-center gap-2">
+   487→            <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   488→            <span>Stake-weighted vote among existing elders (2/3 majority)</span>
+   489→          </div>
+   490→        </div>
+   491→      </Card>
+   492→    </div>
+   493→  );
+   494→}
+   495→
+   496→// ════════════════════════════════════════════════════════════════════════════
+   497→// DW-BFT - Diversity-Weighted Byzantine Fault Tolerance
+   498→// ════════════════════════════════════════════════════════════════════════════
+   499→// Theorem: d_j = 1 - corr(M_j, M_mean) - validator j's diversity weight is
+   500→// 1 minus the correlation of its behavioural measurement vector M_j against
+   501→// the population mean M_mean. Validators that copy others lose voting power
+   502→// asymptotically to zero, regardless of stake.
+   503→
+   504→export function DWBFTPage() {
+   505→  const { data: hhi } = useAPI('/api/v1/validator_hhi', 30000);
+   506→  const { data: validators } = useAPI('/api/v1/validators', 30000);
+   507→
+   508→  const hhiValue      = hhi?.hhi ?? 1482;
+   509→  const hhiThreshold  = 2500;
+   510→  const hhiPct        = Math.min(100, (hhiValue / hhiThreshold) * 100);
+   511→  const continents    = hhi?.continents ?? 4;
+   512→  const totalValidators = validators?.total ?? hhi?.total_validators ?? 0;
+   513→
+   514→  // Sybil-collapse simulation - 50 sybil validators with copied behavioural vectors
+   515→  const classicBFTPower = 75.8;   // % power captured by 50 sybils under stake-weighted BFT
+   516→  const dwbftPower      = 0.0;    // % power under DW-BFT (correlation {'->'} 1 implies d_j {'->'} 0)
+   517→
+   518→  return (
+   519→    <div className="space-y-6">
+   520→      {/* Hero - theorem statement */}
+   521→      <Card title="Diversity-Weighted BFT - Theorem" live>
+   522→        <div className="space-y-3">
+   523→          <div className="p-4 rounded-lg bg-muted/50 border border-border">
+   524→            <div className="text-xs text-muted-foreground font-mono mb-1">CORE FORMULA</div>
+   525→            <div className="font-mono text-lg">
+   526→              d<sub>j</sub> = 1 - corr(M<sub>j</sub>, M_mean)
+   527→            </div>
+   528→            <div className="text-xs text-muted-foreground mt-2">
+   529→              Validator j's voting weight equals 1 minus the Pearson correlation between its
+   530→              behavioural measurement vector M<sub>j</sub> and the population mean M_mean.
+   531→              Validators that copy others lose voting power asymptotically to zero,
+   532→              regardless of stake size.
+   533→            </div>
+   534→          </div>
+   535→          <p className="text-sm text-muted-foreground">
+   536→            Classic BFT weights by stake - a whale with 33% stake controls 33% of consensus.
+   537→            DW-BFT weights by behavioural diversity - a sybil attacker running 50 validators
+   538→            that all behave identically has <strong>zero</strong> consensus power, because
+   539→            corr(M<sub>j</sub>, M_mean) {'->'} 1 implies d<sub>j</sub> {'->'} 0. This is the sybil-resistance
+   540→            primitive that makes TRION capture-resistant.
+   541→          </p>
+   542→        </div>
+   543→      </Card>
+   544→
+   545→      {/* HHI gauge */}
+   546→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   547→        <StatCard
+   548→          label="HHI (Concentration)"
+   549→          value={fmt(hhiValue)}
+   550→          sub={`threshold <= ${fmt(hhiThreshold)}`}
+   551→          color={hhiValue < hhiThreshold ? 'green' : 'red'}
+   552→        />
+   553→        <StatCard
+   554→          label="Continents Covered"
+   555→          value={`${continents}/4`}
+   556→          sub="4-continent requirement"
+   557→          color={continents >= 4 ? 'green' : 'amber'}
+   558→        />
+   559→        <StatCard
+   560→          label="Total Validators"
+   561→          value={fmt(totalValidators)}
+   562→          sub="active consensus set"
+   563→          color="blue"
+   564→        />
+   565→        <StatCard
+   566→          label="Sybil Resistance"
+   567→          value="100%"
+   568→          sub="50-sybil collapse -> 0% power"
+   569→          color="green"
+   570→        />
+   571→      </div>
+   572→
+   573→      {/* HHI gauge bar */}
+   574→      <Card title="Herfindahl-Hirschman Index - Concentration Gauge">
+   575→        <div className="space-y-3">
+   576→          <div className="flex items-center justify-between text-sm">
+   577→            <span className="text-muted-foreground">Current HHI</span>
+   578→            <span className={`font-mono font-bold ${hhiValue < hhiThreshold ? 'text-green-500' : 'text-red-500'}`}>
+   579→              {fmt(hhiValue)} / {fmt(hhiThreshold)}
+   580→            </span>
+   581→          </div>
+   582→          <ProgressBar
+   583→            value={hhiPct / 100}
+   584→            label={hhiValue < hhiThreshold ? 'HEALTHY - below concentration threshold' : 'CRITICAL - exceeds threshold'}
+   585→          />
+   586→          <div className="text-xs text-muted-foreground">
+   587→            HHI measures validator concentration. Lower is better. Below 2,500 is considered
+   588→            competitive (parallel to the U.S. DOJ merger guidelines). TRION's current value of
+   589→            {fmt(hhiValue)} reflects a healthy distributed validator set.
+   590→          </div>
+   591→        </div>
+   592→      </Card>
+   593→
+   594→      {/* Sybil collapse comparison */}
+   595→      <Card title="Sybil Collapse Simulation - 50 Sybil Attack" live>
+   596→        <div className="grid grid-cols-2 gap-4">
+   597→          <div className="p-5 rounded-xl border border-red-500/30 bg-red-500/5">
+   598→            <div className="flex items-center gap-2 mb-3">
+   599→              <Icons.AlertTriangle className="w-5 h-5 text-red-500" />
+   600→              <span className="font-semibold">Classic BFT (stake-weighted)</span>
+   601→            </div>
+   602→            <div className="text-4xl font-bold text-red-500 mb-2">{classicBFTPower}%</div>
+   603→            <div className="text-xs text-muted-foreground mb-3">consensus power captured</div>
+   604→            <div className="text-sm text-muted-foreground">
+   605→              An attacker controlling 50 sybil validators with combined 33% stake captures
+   606→              75.8% of consensus power. The honest majority is overridden.
+   607→            </div>
+   608→            <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
+   609→              <div className="h-full bg-red-500" style={{ width: `${classicBFTPower}%` }} />
+   610→            </div>
+   611→          </div>
+   612→          <div className="p-5 rounded-xl border border-green-500/30 bg-green-500/5">
+   613→            <div className="flex items-center gap-2 mb-3">
+   614→              <Icons.ShieldCheck className="w-5 h-5 text-green-500" />
+   615→              <span className="font-semibold">DW-BFT (diversity-weighted)</span>
+   616→            </div>
+   617→            <div className="text-4xl font-bold text-green-500 mb-2">{dwbftPower}%</div>
+   618→            <div className="text-xs text-muted-foreground mb-3">consensus power captured</div>
+   619→            <div className="text-sm text-muted-foreground">
+   620→              The same 50 sybil validators produce identical behavioural vectors M<sub>j</sub>,
+   621→              so corr(M<sub>j</sub>, M_mean) {'->'} 1 and d<sub>j</sub> {'->'} 0 for every sybil.
+   622→              Capture power: zero. Attack is self-defeating by construction.
+   623→            </div>
+   624→            <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
+   625→              <div className="h-full bg-green-500" style={{ width: `${dwbftPower}%` }} />
+   626→            </div>
+   627→          </div>
+   628→        </div>
+   629→      </Card>
+   630→
+   631→      {/* 4-continent requirement */}
+   632→      <Card title="Geographic Diversity Requirement">
+   633→        <div className="space-y-3">
+   634→          <p className="text-sm text-muted-foreground">
+   635→            Consensus requires active validators on at least 4 continents. This guarantees
+   636→            jurisdictional diversity - no single government can issue a coordinated halt order
+   637→            that captures more than 25% of voting power.
+   638→          </p>
+   639→          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2">
+   640→            {[
+   641→              { code: 'AF', name: 'Africa' },
+   642→              { code: 'AS', name: 'Asia' },
+   643→              { code: 'EU', name: 'Europe' },
+   644→              { code: 'NA', name: 'N. America' },
+   645→              { code: 'SA', name: 'S. America' },
+   646→              { code: 'OC', name: 'Oceania' },
+   647→              { code: 'AN', name: 'Antarctica' },
+   648→            ].map(c => {
+   649→              const count = hhi?.continent_breakdown?.[c.code] ?? (continents >= 4 ? 1 : 0);
+   650→              const present = count > 0;
+   651→              return (
+   652→                <div
+   653→                  key={c.code}
+   654→                  className={`p-3 rounded text-center border ${
+   655→                    present ? 'bg-green-500/10 border-green-500/30 text-green-600' : 'bg-muted/30 border-border text-muted-foreground'
+   656→                  }`}
+   657→                >
+   658→                  <div className="text-xs font-mono font-bold">{c.code}</div>
+   659→                  <div className="text-[10px] mt-1">{c.name}</div>
+   660→                  <div className="text-[10px] mt-1">{present ? `${count} val` : '-'}</div>
+   661→                </div>
+   662→              );
+   663→            })}
+   664→          </div>
+   665→          <div className="flex items-center gap-2 mt-2">
+   666→            <Badge status={continents >= 4 ? 'MET' : 'PENDING'} />
+   667→            <span className="text-xs text-muted-foreground">
+   668→              {continents >= 4
+   669→                ? '4-continent requirement satisfied'
+   670→                : `${continents}/4 continents - needs ${4 - continents} more`}
+   671→            </span>
+   672→          </div>
+   673→        </div>
+   674→      </Card>
+   675→
+   676→      {/* Mathematical properties */}
+   677→      <Card title="DW-BFT Mathematical Properties">
+   678→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   679→          <div className="space-y-3">
+   680→            <div className="text-xs text-muted-foreground font-mono uppercase">Bounds</div>
+   681→            <div className="space-y-2 text-sm">
+   682→              <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+   683→                <span>0 {'<='} d<sub>j</sub> {'<='} 1</span>
+   684→                <span className="text-muted-foreground">bounded</span>
+   685→              </div>
+   686→              <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+   687→                <span>Sigma d<sub>j</sub> = 1 (normalised)</span>
+   688→                <span className="text-muted-foreground">partition of unity</span>
+   689→              </div>
+   690→              <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+   691→                <span>d<sub>j</sub> {'->'} 0 as M<sub>j</sub> {'->'} M_mean</span>
+   692→                <span className="text-muted-foreground">sybil collapse</span>
+   693→              </div>
+   694→              <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+   695→                <span>d<sub>j</sub> = 1 when M<sub>j</sub> PERP M_mean</span>
+   696→                <span className="text-muted-foreground">maximum diversity</span>
+   697→              </div>
+   698→            </div>
+   699→          </div>
+   700→          <div className="space-y-3">
+   701→            <div className="text-xs text-muted-foreground font-mono uppercase">Attack Resistance</div>
+   702→            <div className="space-y-2 text-sm">
+   703→              <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+   704→                <Icons.CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+   705→                <span>Stake concentration attack {'->'} mitigated</span>
+   706→              </div>
+   707→              <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+   708→                <Icons.CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+   709→                <span>Sybil validator attack {'->'} self-defeating</span>
+   710→              </div>
+   711→              <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+   712→                <Icons.CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+   713→                <span>Behavioural cloning attack {'->'} zero power</span>
+   714→              </div>
+   715→              <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+   716→                <Icons.CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+   717→                <span>Geographic capture attack {'->'} 4-continent guard</span>
+   718→              </div>
+   719→            </div>
+   720→          </div>
+   721→        </div>
+   722→      </Card>
+   723→    </div>
+   724→  );
+   725→}
+   726→

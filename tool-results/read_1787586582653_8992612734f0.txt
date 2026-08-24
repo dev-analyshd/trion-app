@@ -1,0 +1,442 @@
+    36→    36→ *   SCROLL_ORACLE_ADDR       ...
+    37→    37→ *   ZKSYNC_ORACLE_ADDR       ...
+    38→    38→ *
+    39→    39→ * If RELAYER_PRIVATE_KEY is missing the relayer runs in DRY_RUN mode and
+    40→    40→ * logs the would-be transaction for every chain. If a per-chain *_ORACLE_ADDR
+    41→    41→ * is missing, that chain is skipped.
+    42→    42→ */
+    43→    43→
+    44→    44→import { ethers } from "ethers";
+    45→    45→import axios from "axios";
+    46→    46→import { createHash } from "node:crypto";
+    47→    47→import fs from "node:fs";
+    48→    48→
+    49→    49→const ORACLE_API_URL  = process.env.ORACLE_API_URL  || "http://127.0.0.1:5000";
+    50→    50→const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
+    51→    51→const MONITORED       = (process.env.MONITORED_ENTITIES ||
+    52→    52→  "0xb819c63c02Ed5aB49017C0f3f2568A14624658b3,uniswap,aave,compound"
+    53→    53→).split(",").map(s => s.trim()).filter(Boolean);
+    54→    54→
+    55→    55→const PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY || null;
+    56→    56→const DRY_RUN     = !PRIVATE_KEY;
+    57→    57→
+    58→    58→// Multi-chain registry — points at the testnets/mainnets where TRION oracle
+    59→    59→// contracts are actually deployed (see proof-ledger/deploy_*.json). Each entry
+    60→    60→// has a baked-in default contract address from the upstream deployment
+    61→    61→// manifests; override via *_ORACLE_ADDR secrets if you redeploy. Override
+    62→    62→// *_RPC_URL to use a private endpoint.
+    63→    63→const CHAINS = [
+    64→    64→  // ── Mainnet oracle targets (TRIONOracleV3 deployed) ──────────────────────
+    65→    65→  { key: "hashkey",  name: "HashKey Mainnet",  chainId: 177,    rpcEnv: "HSK_RPC_URL",     rpcDefault: "https://mainnet.hsk.xyz",         addrEnv: "HSK_ORACLE_ADDR",     addrDefault: "0x708193f93Fb897fbeA72e7e7D19237770F19E969" },
+    66→    66→  // ── Mainnet oracle targets (contract deploy pending — logs "no ADDR") ───
+    67→    67→  { key: "eth-mainnet",  name: "Ethereum Mainnet",  chainId: 1,      rpcEnv: "ETH_MAINNET_RPC_URL",  rpcDefault: "https://ethereum.publicnode.com",    addrEnv: "ETH_MAINNET_ORACLE_ADDR",  addrDefault: null },
+    68→    68→  { key: "arb-mainnet",  name: "Arbitrum One",       chainId: 42161,  rpcEnv: "ARB_MAINNET_RPC_URL",  rpcDefault: "https://arb1.arbitrum.io/rpc",        addrEnv: "ARB_MAINNET_ORACLE_ADDR",  addrDefault: null },
+    69→    69→  { key: "base-mainnet", name: "Base Mainnet",        chainId: 8453,   rpcEnv: "BASE_MAINNET_RPC_URL", rpcDefault: "https://mainnet.base.org",            addrEnv: "BASE_MAINNET_ORACLE_ADDR", addrDefault: null },
+    70→    70→  { key: "op-mainnet",   name: "Optimism Mainnet",    chainId: 10,     rpcEnv: "OP_MAINNET_RPC_URL",   rpcDefault: "https://mainnet.optimism.io",         addrEnv: "OP_MAINNET_ORACLE_ADDR",   addrDefault: null },
+    71→    71→  { key: "bnb-mainnet",  name: "BNB Smart Chain",     chainId: 56,     rpcEnv: "BNB_MAINNET_RPC_URL",  rpcDefault: "https://bsc-dataseed.binance.org",    addrEnv: "BNB_MAINNET_ORACLE_ADDR",  addrDefault: null },
+    72→    72→  { key: "polygon",      name: "Polygon Mainnet",     chainId: 137,    rpcEnv: "POLYGON_RPC_URL",      rpcDefault: "https://polygon-rpc.com",             addrEnv: "POLYGON_ORACLE_ADDR",      addrDefault: null },
+    73→    73→  { key: "mantle",       name: "Mantle Mainnet",      chainId: 5000,   rpcEnv: "MANTLE_RPC_URL",       rpcDefault: "https://rpc.mantle.xyz",              addrEnv: "MANTLE_ORACLE_ADDR",       addrDefault: null },
+    74→    74→  { key: "linea",        name: "Linea Mainnet",       chainId: 59144,  rpcEnv: "LINEA_RPC_URL",        rpcDefault: "https://rpc.linea.build",             addrEnv: "LINEA_ORACLE_ADDR",        addrDefault: null },
+    75→    75→  { key: "scroll",       name: "Scroll Mainnet",      chainId: 534352, rpcEnv: "SCROLL_RPC_URL",       rpcDefault: "https://rpc.scroll.io",               addrEnv: "SCROLL_ORACLE_ADDR",       addrDefault: null },
+    76→    76→  // ── 0G Networks ──────────────────────────────────────────────────────────
+    77→    77→  { key: "0g-mainnet",   name: "0G Mainnet",          chainId: 16661,  rpcEnv: "ZERO_G_RPC",           rpcDefault: "https://evmrpc.0g.ai",                addrEnv: "ZG_MAINNET_ORACLE_ADDR",   addrDefault: null },
+    78→    78→
+    79→    79→  // ── Avalanche ────────────────────────────────────────────────────────────
+    80→    80→  { key: "avalanche",    name: "Avalanche C-Chain",   chainId: 43114,  rpcEnv: "AVAX_RPC_URL",         rpcDefault: "https://api.avax.network/ext/bc/C/rpc", addrEnv: "AVAX_ORACLE_ADDR",       addrDefault: null },
+    81→    81→
+    82→    82→  // ── Fantom / Sonic ────────────────────────────────────────────────────────
+    83→    83→  { key: "fantom",       name: "Fantom Opera",        chainId: 250,    rpcEnv: "FTM_RPC_URL",          rpcDefault: "https://rpcapi.fantom.network",       addrEnv: "FTM_ORACLE_ADDR",          addrDefault: null },
+    84→    84→  { key: "sonic",        name: "Sonic Mainnet",       chainId: 146,    rpcEnv: "SONIC_RPC_URL",        rpcDefault: "https://rpc.soniclabs.com",           addrEnv: "SONIC_ORACLE_ADDR",        addrDefault: null },
+    85→    85→
+    86→    86→  // ── zkSync Era ────────────────────────────────────────────────────────────
+    87→    87→  { key: "zksync-era",   name: "zkSync Era",          chainId: 324,    rpcEnv: "ZKSYNC_RPC_URL",       rpcDefault: "https://mainnet.era.zksync.io",       addrEnv: "ZKSYNC_ORACLE_ADDR",       addrDefault: null },
+    88→    88→
+    89→    89→  // ── Berachain ─────────────────────────────────────────────────────────────
+    90→    90→  { key: "berachain",    name: "Berachain",           chainId: 80094,  rpcEnv: "BERA_RPC_URL",         rpcDefault: "https://rpc.berachain.com",           addrEnv: "BERA_ORACLE_ADDR",         addrDefault: null },
+    91→    91→
+    92→    92→  // ── X Layer (OKX L2) ─────────────────────────────────────────────────────
+    93→    93→  { key: "xlayer",       name: "X Layer",             chainId: 196,    rpcEnv: "XLAYER_RPC_URL",       rpcDefault: "https://rpc.xlayer.tech",             addrEnv: "XLAYER_ORACLE_ADDR",       addrDefault: null },
+    94→    94→
+    95→    95→  // ── XDC Network ──────────────────────────────────────────────────────────
+    96→    96→  { key: "xdc",          name: "XDC Network",         chainId: 50,     rpcEnv: "XDC_RPC_URL",          rpcDefault: "https://rpc.xinfin.network",          addrEnv: "XDC_ORACLE_ADDR",          addrDefault: null },
+    97→    97→
+    98→    98→  // ── Story Protocol (IP) ───────────────────────────────────────────────────
+    99→    99→  { key: "story-ip",     name: "Story Protocol IP",   chainId: 1514,   rpcEnv: "STORY_RPC_URL",        rpcDefault: "https://mainnet.storyrpc.io",         addrEnv: "STORY_ORACLE_ADDR",        addrDefault: null },
+   100→   100→
+   101→   101→  // ── Blast ─────────────────────────────────────────────────────────────────
+   102→   102→  { key: "blast",        name: "Blast Mainnet",       chainId: 81457,  rpcEnv: "BLAST_RPC_URL",        rpcDefault: "https://rpc.blast.io",                addrEnv: "BLAST_ORACLE_ADDR",        addrDefault: null },
+   103→   103→
+   104→   104→  // ── Manta Pacific ─────────────────────────────────────────────────────────
+   105→   105→  { key: "manta",        name: "Manta Pacific",       chainId: 169,    rpcEnv: "MANTA_RPC_URL",        rpcDefault: "https://pacific-rpc.manta.network/http", addrEnv: "MANTA_ORACLE_ADDR",     addrDefault: null },
+   106→   106→
+   107→   107→  // ── Mode Network ──────────────────────────────────────────────────────────
+   108→   108→  { key: "mode",         name: "Mode Network",        chainId: 34443,  rpcEnv: "MODE_RPC_URL",         rpcDefault: "https://mainnet.mode.network",        addrEnv: "MODE_ORACLE_ADDR",         addrDefault: null },
+   109→   109→
+   110→   110→  // ── Taiko ─────────────────────────────────────────────────────────────────
+   111→   111→  { key: "taiko",        name: "Taiko Mainnet",       chainId: 167000, rpcEnv: "TAIKO_RPC_URL",        rpcDefault: "https://rpc.mainnet.taiko.xyz",       addrEnv: "TAIKO_ORACLE_ADDR",        addrDefault: null },
+   112→   112→
+   113→   113→  // ── Fraxtal ───────────────────────────────────────────────────────────────
+   114→   114→  { key: "fraxtal",      name: "Fraxtal Mainnet",     chainId: 252,    rpcEnv: "FRAXTAL_RPC_URL",      rpcDefault: "https://rpc.frax.com",                addrEnv: "FRAXTAL_ORACLE_ADDR",      addrDefault: null },
+   115→   115→
+   116→   116→  // ── Metis ─────────────────────────────────────────────────────────────────
+   117→   117→  { key: "metis",        name: "Metis Andromeda",     chainId: 1088,   rpcEnv: "METIS_RPC_URL",        rpcDefault: "https://andromeda.metis.io/?owner=1088", addrEnv: "METIS_ORACLE_ADDR",     addrDefault: null },
+   118→   118→
+   119→   119→  // ── Celo ──────────────────────────────────────────────────────────────────
+   120→   120→  { key: "celo",         name: "Celo Mainnet",        chainId: 42220,  rpcEnv: "CELO_RPC_URL",         rpcDefault: "https://forno.celo.org",              addrEnv: "CELO_ORACLE_ADDR",         addrDefault: null },
+   121→   121→
+   122→   122→  // ── Gnosis Chain ──────────────────────────────────────────────────────────
+   123→   123→  { key: "gnosis",       name: "Gnosis Chain",        chainId: 100,    rpcEnv: "GNOSIS_RPC_URL",       rpcDefault: "https://rpc.gnosischain.com",         addrEnv: "GNOSIS_ORACLE_ADDR",       addrDefault: null },
+   124→   124→
+   125→   125→  // ── Moonbeam ──────────────────────────────────────────────────────────────
+   126→   126→  { key: "moonbeam",     name: "Moonbeam",            chainId: 1284,   rpcEnv: "MOONBEAM_RPC_URL",     rpcDefault: "https://rpc.api.moonbeam.network",    addrEnv: "MOONBEAM_ORACLE_ADDR",     addrDefault: null },
+   127→   127→
+   128→   128→  // ── Kaia (formerly Klaytn) ────────────────────────────────────────────────
+   129→   129→  { key: "kaia",         name: "Kaia Mainnet",        chainId: 8217,   rpcEnv: "KAIA_RPC_URL",         rpcDefault: "https://public-en.node.kaia.io",      addrEnv: "KAIA_ORACLE_ADDR",         addrDefault: null },
+   130→   130→
+   131→   131→  // ── CORE Chain ────────────────────────────────────────────────────────────
+   132→   132→  { key: "core",         name: "CORE Chain",          chainId: 1116,   rpcEnv: "CORE_RPC_URL",         rpcDefault: "https://rpc.coredao.org",             addrEnv: "CORE_ORACLE_ADDR",         addrDefault: null },
+   133→   133→
+   134→   134→  // ── Bitlayer (BTC L2) ─────────────────────────────────────────────────────
+   135→   135→  { key: "bitlayer",     name: "Bitlayer Mainnet",    chainId: 200901, rpcEnv: "BITLAYER_RPC_URL",     rpcDefault: "https://rpc.bitlayer.org",            addrEnv: "BITLAYER_ORACLE_ADDR",     addrDefault: null },
+   136→   136→
+   137→   137→  // ── BOB Network (BTC L2) ─────────────────────────────────────────────────
+   138→   138→  { key: "bob",          name: "BOB Network",         chainId: 60808,  rpcEnv: "BOB_RPC_URL",          rpcDefault: "https://rpc.gobob.xyz",               addrEnv: "BOB_ORACLE_ADDR",          addrDefault: null },
+   139→   139→
+   140→   140→  // ── Rootstock (RSK) ──────────────────────────────────────────────────────
+   141→   141→  { key: "rootstock",    name: "Rootstock RSK",       chainId: 30,     rpcEnv: "RSK_RPC_URL",          rpcDefault: "https://public-node.rsk.co",          addrEnv: "RSK_ORACLE_ADDR",          addrDefault: null },
+   142→   142→
+   143→   143→  // ── Cronos ───────────────────────────────────────────────────────────────
+   144→   144→  { key: "cronos",       name: "Cronos Mainnet",      chainId: 25,     rpcEnv: "CRO_RPC_URL",          rpcDefault: "https://evm.cronos.org",              addrEnv: "CRO_ORACLE_ADDR",          addrDefault: null },
+   145→   145→
+   146→   146→  // ── Aurora (NEAR EVM) ────────────────────────────────────────────────────
+   147→   147→  { key: "aurora",       name: "Aurora Mainnet",      chainId: 1313161554, rpcEnv: "AURORA_RPC_URL",   rpcDefault: "https://mainnet.aurora.dev",          addrEnv: "AURORA_ORACLE_ADDR",       addrDefault: null },
+   148→   148→
+   149→   149→  // ── Harmony ONE ──────────────────────────────────────────────────────────
+   150→   150→  { key: "harmony",      name: "Harmony ONE",         chainId: 1666600000, rpcEnv: "ONE_RPC_URL",      rpcDefault: "https://api.harmony.one",             addrEnv: "ONE_ORACLE_ADDR",          addrDefault: null },
+   151→   151→
+   152→   152→  // ── IoTeX ─────────────────────────────────────────────────────────────────
+   153→   153→  { key: "iotex",        name: "IoTeX Mainnet",       chainId: 4689,   rpcEnv: "IOTEX_RPC_URL",        rpcDefault: "https://babel-api.mainnet.iotex.io",  addrEnv: "IOTEX_ORACLE_ADDR",        addrDefault: null },
+   154→   154→
+   155→   155→  // ── Conflux eSpace ───────────────────────────────────────────────────────
+   156→   156→  { key: "conflux",      name: "Conflux eSpace",      chainId: 1030,   rpcEnv: "CFX_RPC_URL",          rpcDefault: "https://evm.confluxrpc.com",          addrEnv: "CFX_ORACLE_ADDR",          addrDefault: null },
+   157→   157→
+   158→   158→  // ── Expansion batch 3: Monad · Filecoin · HyperLiquid · Abstract · Zora ─
+   159→   159→  //    WEMIX · OKT · Sapphire · Telos · Kroma · Cyber · Sei EVM · Canto ────
+   160→   160→  //    Neon EVM · IOTA EVM ─────────────────────────────────────────────────
+   161→   161→  { key: "monad-mainnet",  name: "Monad Mainnet",        chainId: 10143,     rpcEnv: "MONAD_RPC_URL",        rpcDefault: "https://rpc.monad.xyz",                      addrEnv: "MONAD_ORACLE_ADDR",        addrDefault: null },
+   162→   162→  { key: "filecoin",       name: "Filecoin FEVM",         chainId: 314,       rpcEnv: "FIL_RPC_URL",          rpcDefault: "https://api.node.glif.io/rpc/v1",            addrEnv: "FIL_ORACLE_ADDR",          addrDefault: null },
+   163→   163→  { key: "hyperliquid",    name: "HyperLiquid EVM",       chainId: 999,       rpcEnv: "HYPERLIQ_RPC_URL",     rpcDefault: "https://rpc.hyperliquid.xyz/evm",    addrEnv: "HYPERLIQ_ORACLE_ADDR",     addrDefault: null },
+   164→   164→  { key: "abstract",       name: "Abstract Mainnet",      chainId: 2741,      rpcEnv: "ABSTRACT_RPC_URL",     rpcDefault: "https://api.mainnet.abs.xyz",                addrEnv: "ABSTRACT_ORACLE_ADDR",     addrDefault: null },
+   165→   165→  { key: "zora",           name: "Zora Network",          chainId: 7777777,   rpcEnv: "ZORA_RPC_URL",         rpcDefault: "https://rpc.zora.energy",                    addrEnv: "ZORA_ORACLE_ADDR",         addrDefault: null },
+   166→   166→  { key: "wemix",          name: "WEMIX 3.0",             chainId: 1111,      rpcEnv: "WEMIX_RPC_URL",        rpcDefault: "https://api.wemix.com",                      addrEnv: "WEMIX_ORACLE_ADDR",        addrDefault: null },
+   167→   167→  { key: "okt-chain",      name: "OKX Chain (OKT)",       chainId: 66,        rpcEnv: "OKT_RPC_URL",          rpcDefault: "https://exchainrpc.okex.org",                addrEnv: "OKT_ORACLE_ADDR",          addrDefault: null },
+   168→   168→  { key: "oasis-sapphire", name: "Oasis Sapphire",        chainId: 23294,     rpcEnv: "SAPPHIRE_RPC_URL",     rpcDefault: "https://sapphire.oasis.io",                  addrEnv: "SAPPHIRE_ORACLE_ADDR",     addrDefault: null },
+   169→   169→  { key: "telos",          name: "Telos EVM",             chainId: 40,        rpcEnv: "TELOS_RPC_URL",        rpcDefault: "https://mainnet.telos.net/evm",              addrEnv: "TELOS_ORACLE_ADDR",        addrDefault: null },
+   170→   170→  { key: "kroma",          name: "Kroma Mainnet",         chainId: 255,       rpcEnv: "KROMA_RPC_URL",        rpcDefault: "https://api.kroma.network",                  addrEnv: "KROMA_ORACLE_ADDR",        addrDefault: null },
+   171→   171→  { key: "cyber",          name: "Cyber L3",              chainId: 7560,      rpcEnv: "CYBER_RPC_URL",        rpcDefault: "https://rpc.cyber.co",                       addrEnv: "CYBER_ORACLE_ADDR",        addrDefault: null },
+   172→   172→  { key: "sei-evm",        name: "Sei EVM",               chainId: 1329,      rpcEnv: "SEI_EVM_RPC_URL",      rpcDefault: "https://evm-rpc.sei-apis.com",               addrEnv: "SEI_EVM_ORACLE_ADDR",      addrDefault: null },
+   173→   173→  { key: "canto",          name: "Canto Mainnet",         chainId: 7700,      rpcEnv: "CANTO_RPC_URL",        rpcDefault: "https://canto.gravitychain.io",              addrEnv: "CANTO_ORACLE_ADDR",        addrDefault: null },
+   174→   174→  { key: "neon-evm",       name: "Neon EVM (Solana)",     chainId: 245022934, rpcEnv: "NEON_RPC_URL",         rpcDefault: "https://neon-proxy-mainnet.solana.p2p.org",  addrEnv: "NEON_ORACLE_ADDR",         addrDefault: null },
+   175→   175→  { key: "iota-evm",       name: "IOTA EVM",              chainId: 8822,      rpcEnv: "IOTA_RPC_URL",         rpcDefault: "https://json-rpc.evm.iotaledger.net",        addrEnv: "IOTA_ORACLE_ADDR",         addrDefault: null },
+   176→   176→
+   177→   177→  // ── BOT Chain (AI-agent EVM L1) ──────────────────────────────────────────
+   178→   178→  { key: "bot-chain",      name: "BOT Chain",             chainId: 677,       rpcEnv: "BOT_CHAIN_RPC_URL",    rpcDefault: "https://rpc.botchain.ai",                    addrEnv: "BOT_CHAIN_ORACLE_ADDR",    addrDefault: null },
+   179→   179→
+   180→   180→  // ── Testnets (deployed oracle contracts — active for testing) ────────────
+   181→   181→  { key: "arb-sepolia",  name: "Arbitrum Sepolia",    chainId: 421614, rpcEnv: "ARB_SEPOLIA_RPC_URL",  rpcDefault: "https://sepolia-rollup.arbitrum.io/rpc", addrEnv: "ARB_SEPOLIA_ORACLE_ADDR",  addrDefault: "0xb819c63c02Ed5aB49017C0f3f2568A14624658b3" },
+   182→   182→  { key: "eth-sepolia",  name: "Ethereum Sepolia",    chainId: 11155111, rpcEnv: "ETH_SEPOLIA_RPC_URL", rpcDefault: "https://ethereum-sepolia.publicnode.com", addrEnv: "ETH_SEPOLIA_ORACLE_ADDR",  addrDefault: "0xB07AD89a10f94B6D3bF2ab0B3a37988b1F37Db39" },
+   183→   183→  { key: "base-sepolia", name: "Base Sepolia",        chainId: 84532,  rpcEnv: "BASE_SEPOLIA_RPC_URL", rpcDefault: "https://sepolia.base.org",              addrEnv: "BASE_SEPOLIA_ORACLE_ADDR", addrDefault: "0x7ADF5B7273883C50EFc005BA7EdD3F379Af9680C" },
+   184→   184→  { key: "op-sepolia",   name: "Optimism Sepolia",    chainId: 11155420, rpcEnv: "OP_SEPOLIA_RPC_URL", rpcDefault: "https://sepolia.optimism.io",           addrEnv: "OP_SEPOLIA_ORACLE_ADDR",   addrDefault: "0x708193f93Fb897fbeA72e7e7D19237770F19E969" },
+   185→   185→  { key: "bnb-testnet",  name: "BNB Testnet",         chainId: 97,     rpcEnv: "BNB_TESTNET_RPC_URL",  rpcDefault: "https://bsc-testnet-rpc.publicnode.com", addrEnv: "BNB_TESTNET_ORACLE_ADDR",  addrDefault: "0xf0e20F48D4c2c63DCAf4bad01471d29DEb921721" },
+   186→   186→  { key: "0g-galileo",   name: "0G Galileo Testnet",  chainId: 16602,  rpcEnv: "ZG_GALILEO_RPC",       rpcDefault: "https://evmrpc-testnet.0g.ai",          addrEnv: "ZG_GALILEO_ORACLE_ADDR",   addrDefault: "0x0471B2BE25c2eBbAe7FAc17383F1692979F0A87C" },
+   187→   187→];
+   188→   188→
+   189→   189→const ABI = [
+   190→   190→  "function publishSignal(bytes32 txId, uint256 packedData, bytes[] calldata signatures) external",
+   191→   191→  "function quorumRequired() external view returns (uint256)",
+   192→   192→  "function isValidator(address) external view returns (bool)",
+   193→   193→];
+   194→   194→
+   195→   195→// ── 0G ExecutionGate integration ─────────────────────────────────────────────
+   196→   196→// When the relayer processes 0G Galileo, it ALSO pushes to the TRIONExecutionGate
+   197→   197→// contract (separate from TRIONOracleV3) which implements the full 0G integration:
+   198→   198→//   - beoHash: keccak256 of entity's behavioral DNA fingerprint
+   199→   199→//   - daProofHash: deterministic 0G DA content hash for anomaly proof
+   200→   200→//   - storageRoot: 0G Storage merkle root for FAISS behavioral index
+   201→   201→const ZG_GATE_ADDR = process.env.ZG_EXECUTION_GATE_ADDR
+   202→   202→  || "0xA85B49C73B5710d9ddB1CB5a94c52D0F33c4199b"; // 0G Mainnet
+   203→   203→const ZG_GATE_RPC  = process.env.ZERO_G_RPC || "https://evmrpc.0g.ai";
+   204→   204→const ZG_GATE_CHAIN = 16661; // 0G Mainnet (was 16602 Galileo testnet)
+   205→   205→const ZG_GATE_EXPLORER = "https://chainscan.0g.ai";
+   206→   206→
+   207→   207→const ZG_GATE_ABI = [
+   208→   208→  "function publishSignal(bytes32 entityId, uint256 packedData, bytes32 beoHash, bytes32 daProofHash, string calldata storageRoot, bytes[] calldata signatures) external",
+   209→   209→  "function isValidator(address) external view returns (bool)",
+   210→   210→  "function beoVectorStorageRoot() external view returns (string memory)",
+   211→   211→  "function quorumRequired() external view returns (uint256)",
+   212→   212→];
+   213→   213→
+   214→   214→// Persistent 0G gate relayer state
+   215→   215→const ZG_STATE_FILE = "/tmp/trion_zg_gate_relayer.json";
+   216→   216→const zgState = (() => {
+   217→   217→  try { return JSON.parse(fs.readFileSync(ZG_STATE_FILE, "utf-8")); }
+   218→   218→  catch { return { generated_at: null, contract: ZG_GATE_ADDR, entities: {} }; }
+   219→   219→})();
+   220→   220→function persistZGState() {
+   221→   221→  try {
+   222→   222→    const blob = JSON.stringify({ ...zgState, generated_at: new Date().toISOString() }, null, 2);
+   223→   223→    fs.writeFileSync(ZG_STATE_FILE, blob);
+   224→   224→    const pub = process.env.ORACLE_PUBLIC_DIR || "./akashic-oracle/public";
+   225→   225→    fs.writeFileSync(`${pub}/zg_gate_state.json`, blob);
+   226→   226→  } catch { /* non-fatal */ }
+   227→   227→}
+   228→   228→
+   229→   229→function classifyGateStatus(coherence, threshold) {
+   230→   230→  const ratio = coherence / (threshold || 0.55);
+   231→   231→  if (ratio >= 1.05) return 1n; // SAFE
+   232→   232→  if (ratio >= 0.90) return 2n; // ELEVATED
+   233→   233→  if (ratio >= 0.70) return 3n; // COLLAPSE
+   234→   234→  return 4n;                    // HOSTILE
+   235→   235→}
+   236→   236→
+   237→   237→function packGateSignal(signal, blockNum) {
+   238→   238→  const phi_t   = signal.coherence || signal.signal_value || 0.5;
+   239→   239→  const theta   = signal.threshold || 0.55;
+   240→   240→  const status  = classifyGateStatus(phi_t, theta);
+   241→   241→  const drop    = BigInt(Math.max(0, Math.floor((theta - phi_t) / theta * 100 * 10000)));
+   242→   242→  const phi_t32 = clampU32(phi_t * 1_000_000);
+   243→   243→  const theta32 = clampU32(theta * 1_000_000);
+   244→   244→  const block64 = clampU64(blockNum);
+   245→   245→  const ts64    = clampU64(Math.floor(Date.now() / 1000));
+   246→   246→
+   247→   247→  return {
+   248→   248→    packed: (ts64 << 168n) | (block64 << 104n) | (drop << 72n)
+   249→   249→          | (theta32 << 40n) | (phi_t32 << 8n) | status,
+   250→   250→    status: Number(status),
+   251→   251→    phi_t, theta,
+   252→   252→    statusLabel: ["","SAFE","ELEVATED","COLLAPSE","HOSTILE"][Number(status)] || "UNKNOWN",
+   253→   253→  };
+   254→   254→}
+   255→   255→
+   256→   256→function deriveBeoHash(entity, signal) {
+   257→   257→  const coh = signal.coherence_score ?? signal.coherence ?? 0.5;
+   258→   258→  const dna = [entity, coh.toFixed(6), signal.signal_id || ""].join(":");
+   259→   259→  return ethers.keccak256(ethers.toUtf8Bytes(dna));
+   260→   260→}
+   261→   261→
+   262→   262→function deriveDAProofHash(entity, signal, status) {
+   263→   263→  const proof = JSON.stringify({ entity, phi_t: signal.coherence || 0.5,
+   264→   264→    theta: signal.threshold || 0.55, status, ts: Date.now(), chain: "0G-Galileo" });
+   265→   265→  return "0x" + createHash("sha256").update(proof).digest("hex");
+   266→   266→}
+   267→   267→
+   268→   268→let zgStorageRoot = "0g-storage:galileo:f2500e57d9c8864c5e0c527b25600cf5";
+   269→   269→let zgProvider    = null;
+   270→   270→let zgWallet      = null;
+   271→   271→let zgGate        = null;
+   272→   272→
+   273→   273→async function initZGGate(wallet) {
+   274→   274→  try {
+   275→   275→    zgProvider = new ethers.JsonRpcProvider(ZG_GATE_RPC, ZG_GATE_CHAIN);
+   276→   276→    zgWallet   = wallet ? wallet.connect(zgProvider) : null;
+   277→   277→    zgGate     = new ethers.Contract(ZG_GATE_ADDR, ZG_GATE_ABI, zgWallet || zgProvider);
+   278→   278→
+   279→   279→    // Read storage root from chain
+   280→   280→    const root = await zgGate.beoVectorStorageRoot().catch(() => null);
+   281→   281→    if (root && root.length > 4) zgStorageRoot = root;
+   282→   282→    console.log(` 0G Gate     : ${ZG_GATE_ADDR}`);
+   283→   283→    console.log(` 0G Explorer : ${ZG_GATE_EXPLORER}/address/${ZG_GATE_ADDR}`);
+   284→   284→    console.log(` 0G Storage  : ${zgStorageRoot}`);
+   285→   285→  } catch (e) {
+   286→   286→    console.warn(` 0G Gate init failed: ${e.message?.slice(0, 60)} — gate push disabled`);
+   287→   287→    zgGate = null;
+   288→   288→  }
+   289→   289→}
+   290→   290→
+   291→   291→async function pushToZGGate(entity, signal) {
+   292→   292→  if (!zgGate || !zgWallet) return; // skip in DRY_RUN or if init failed
+   293→   293→
+   294→   294→  try {
+   295→   295→    const blockNum = await zgProvider.getBlockNumber();
+   296→   296→    const { packed, statusLabel, phi_t, theta } = packGateSignal(signal, blockNum);
+   297→   297→    const entityId    = ethers.keccak256(ethers.toUtf8Bytes(entity));
+   298→   298→    const beoHash     = deriveBeoHash(entity, signal);
+   299→   299→    const daProofHash = deriveDAProofHash(entity, signal, statusLabel);
+   300→   300→
+   301→   301→    // Build EIP-191 quorum signature for TRIONExecutionGate.publishSignal.
+   302→   302→    // Contract reconstructs: keccak256(abi.encodePacked(block.chainid, address(this), entityId, packedData))
+   303→   303→    const zgInner = ethers.solidityPackedKeccak256(
+   304→   304→      ["uint256", "address", "bytes32", "uint256"],
+   305→   305→      [ZG_GATE_CHAIN, ZG_GATE_ADDR, entityId, packed]
+   306→   306→    );
+   307→   307→    const zgSig = await zgWallet.signMessage(ethers.getBytes(zgInner));
+   308→   308→
+   309→   309→    const feeData = await zgProvider.getFeeData();
+   310→   310→    const tx = await zgGate.publishSignal(
+   311→   311→      entityId, packed, beoHash, daProofHash, zgStorageRoot, [zgSig],
+   312→   312→      { gasLimit: 300_000, gasPrice: feeData.gasPrice }
+   313→   313→    );
+   314→   314→    const receipt = await tx.wait(1);
+   315→   315→    console.log(`  [0G-GATE   ] ${entity.slice(0,12)}… → ${statusLabel}  Φ=${phi_t.toFixed(4)}  block=${receipt.blockNumber}  hash=${receipt.hash.slice(0,18)}…`);
+   316→   316→
+   317→   317→    zgState.entities[entity] = {
+   318→   318→      entity_id: entityId, status: statusLabel, phi_t, theta,
+   319→   319→      mode: "REAL", tx_hash: receipt.hash, block: receipt.blockNumber,
+   320→   320→      tx_url: `${ZG_GATE_EXPLORER}/tx/${receipt.hash}`,
+   321→   321→      updated_at: new Date().toISOString(),
+   322→   322→    };
+   323→   323→    persistZGState();
+   324→   324→  } catch (e) {
+   325→   325→    const msg = e?.shortMessage || e?.message || String(e);
+   326→   326→    // Log only first 80 chars to avoid noise
+   327→   327→    if (!msg.includes("duplicate")) {
+   328→   328→      console.warn(`  [0G-GATE   ] ${entity.slice(0,12)}… gate push failed: ${msg.slice(0,80)}`);
+   329→   329→    }
+   330→   330→    zgState.entities[entity] = {
+   331→   331→      ...zgState.entities[entity],
+   332→   332→      mode: "ERROR", last_error: msg.slice(0, 120),
+   333→   333→      updated_at: new Date().toISOString(),
+   334→   334→    };
+   335→   335→    persistZGState();
+   336→   336→  }
+   337→   337→}
+   338→   338→
+   339→   339→// ── Active chain set ─────────────────────────────────────────────────────────
+   340→   340→const activeChains = [];
+   341→   341→for (const c of CHAINS) {
+   342→   342→  const rpc  = process.env[c.rpcEnv] || c.rpcDefault;
+   343→   343→  const addr = process.env[c.addrEnv] || c.addrDefault || null;
+   344→   344→  activeChains.push({ ...c, rpc, addr });
+   345→   345→}
+   346→   346→
+   347→   347→// ── Signal packing ───────────────────────────────────────────────────────────
+   348→   348→function clampU32(x) {
+   349→   349→  if (x < 0) return 0n;
+   350→   350→  const v = BigInt(Math.floor(x));
+   351→   351→  const max = (1n << 32n) - 1n;
+   352→   352→  return v > max ? max : v;
+   353→   353→}
+   354→   354→
+   355→   355→function clampU64(x) {
+   356→   356→  if (x < 0) return 0n;
+   357→   357→  const v = BigInt(Math.floor(x));
+   358→   358→  const max = (1n << 64n) - 1n;
+   359→   359→  return v > max ? max : v;
+   360→   360→}
+   361→   361→
+   362→   362→/**
+   363→   363→ * Pack a TRION signal into the uint256 layout expected by TRIONOracleV3.
+   364→   364→ *  status[8] | coherence[32] | threshold[32] | blockNum[64] | timestamp[64]
+   365→   365→ *
+   366→   366→ * Oracle v2 response uses `coherence_score` (not `coherence` / `signal_value`).
+   367→   367→ * We support both field names for forward/backward compatibility.
+   368→   368→ */
+   369→   369→function packSignal(signal) {
+   370→   370→  const coh = signal.coherence_score ?? signal.coherence ?? signal.signal_value ?? 0.5;
+   371→   371→  const thr = signal.threshold ?? 0.55;
+   372→   372→  const isSafe = coh >= thr ? 1n : 0n;
+   373→   373→  const coherence = clampU32(coh * 1_000_000);
+   374→   374→  const threshold = clampU32(thr * 1_000_000);
+   375→   375→  const blockNum  = clampU64(signal.block_num || Date.now() / 1000 | 0);
+   376→   376→  const timestamp = clampU64(Math.floor(Date.now() / 1000));
+   377→   377→
+   378→   378→  return (timestamp << 136n)
+   379→   379→       | (blockNum  << 72n)
+   380→   380→       | (threshold << 40n)
+   381→   381→       | (coherence << 8n)
+   382→   382→       | isSafe;
+   383→   383→}
+   384→   384→
+   385→   385→function deriveTxId(entity, signal) {
+   386→   386→  // bytes32 = exactly 64 hex chars. Oracle's signal_id may be a UUID (with
+   387→   387→  // dashes) or a hex string. Strip dashes so UUIDs become pure hex.
+   388→   388→  const rawSig  = (signal.signal_id || "").replace(/^0x/, "").replace(/-/g, "").toLowerCase();
+   389→   389→  // If after stripping dashes the result is pure hex, use it; otherwise hash it.
+   390→   390→  const sigHex  = /^[0-9a-f]+$/.test(rawSig)
+   391→   391→    ? rawSig
+   392→   392→    : ethers.keccak256(ethers.toUtf8Bytes(signal.signal_id || "")).slice(2);
+   393→   393→  const sigPart = sigHex.padEnd(32, "0").slice(0, 32); // 16 bytes = 32 hex
+   394→   394→  const ts      = Math.floor(Date.now() / 1000).toString(16).padStart(16, "0");
+   395→   395→  // Entity may be a hex address (0x…) OR a string like "uniswap"/"aave".
+   396→   396→  const raw = (entity || "").replace(/^0x/, "").toLowerCase();
+   397→   397→  const isHex = /^[0-9a-f]+$/.test(raw);
+   398→   398→  const entHex  = isHex
+   399→   399→    ? raw.padStart(40, "0")
+   400→   400→    : ethers.keccak256(ethers.toUtf8Bytes(entity || "")).slice(2); // 64 hex
+   401→   401→  const entTail = entHex.slice(-16); // last 8 bytes
+   402→   402→  const hex     = (sigPart + ts + entTail).padEnd(64, "0").slice(0, 64);
+   403→   403→  return "0x" + hex;
+   404→   404→}
+   405→   405→
+   406→   406→// Persistent per-chain publish state, surfaced by the Oracle coverage endpoint
+   407→   407→const RELAYER_STATE_FILE = "/tmp/trion_evm_relayer_latest.json";
+   408→   408→const relayerState = (() => {
+   409→   409→  try { return JSON.parse(fs.readFileSync(RELAYER_STATE_FILE, "utf-8")); }
+   410→   410→  catch { return { generated_at: null, chains: {} }; }
+   411→   411→})();
+   412→   412→
+   413→   413→function persistRelayerState() {
+   414→   414→  try {
+   415→   415→    fs.writeFileSync(
+   416→   416→      RELAYER_STATE_FILE,
+   417→   417→      JSON.stringify({ ...relayerState, generated_at: new Date().toISOString() }, null, 2),
+   418→   418→    );
+   419→   419→  } catch { /* non-fatal */ }
+   420→   420→}
+   421→   421→
+   422→   422→// ── On-chain submission ──────────────────────────────────────────────────────
+   423→   423→async function pushToChain(chain, entity, signal, wallet) {
+   424→   424→  const txId = deriveTxId(entity, signal);
+   425→   425→  const packed = packSignal(signal);
+   426→   426→
+   427→   427→  if (DRY_RUN || !chain.addr) {
+   428→   428→    const reason = DRY_RUN ? "DRY_RUN (no RELAYER_PRIVATE_KEY)" : `no ${chain.addrEnv}`;
+   429→   429→    console.log(`  [${chain.key.padEnd(10)}] ${reason} — would publishSignal(txId=${txId.slice(0,18)}…, packed=0x${packed.toString(16).slice(0,16)}…)`);
+   430→   430→    relayerState.chains[chain.key] = {
+   431→   431→      chain_id: chain.chainId, oracle_address: chain.addr || null,
+   432→   432→      mode: "DRY_RUN", reason, last_tx_id: txId, updated_at: new Date().toISOString(),
+   433→   433→    };
+   434→   434→    persistRelayerState();
+   435→   435→    return { ok: true, dry: true };
+   436→   436→  }
+   437→   437→
+   438→   438→  try {
+   439→   439→    const provider = new ethers.JsonRpcProvider(chain.rpc, chain.chainId);
+   440→   440→    const signer = wallet.connect(provider);
+   441→   441→    const oracle = new ethers.Contract(chain.addr, ABI, signer);
+   442→   442→
+   443→   443→    // Build the digest the contract reconstructs in publishSignal:
+   444→   444→    //   ethSignedMessageHash(keccak256(abi.encodePacked(chainId, oracleAddr, txId, packedData)))
+   445→   445→    const inner = ethers.solidityPackedKeccak256(
+   446→   446→      ["uint256", "address", "bytes32", "uint256"],
+   447→   447→      [chain.chainId, chain.addr, txId, packed]
+   448→   448→    );
+   449→   449→    // ethers v6 signMessage handles the EIP-191 prefix when given raw bytes.
+   450→   450→    const sig = await signer.signMessage(ethers.getBytes(inner));
+   451→   451→
+   452→   452→    // Submit to chain with retry on transient errors (network / RPC drops).
+   453→   453→    // 4xx contract reverts and quorum failures are NOT retried.
+   454→   454→    const receipt = await withRetry(`push:${chain.key}`, async () => {
+   455→   455→      const tx = await oracle.publishSignal(txId, packed, [sig]);
+   456→   456→      return await tx.wait(1);
+   457→   457→    });
+   458→   458→    console.log(`  [${chain.key.padEnd(10)}] published txId=${txId.slice(0,18)}… block=${receipt.blockNumber} hash=${receipt.hash}`);
+   459→   459→    const prev = relayerState.chains[chain.key] || {};
+   460→   460→    relayerState.chains[chain.key] = {
+   461→   461→      ...prev,
+   462→   462→      chain_id: chain.chainId, oracle_address: chain.addr,
+   463→   463→      mode: "REAL", last_status: "ok",
+   464→   464→      last_tx_id: txId,
+   465→   465→      last_tx_hash: receipt.hash,
+   466→   466→      last_block: receipt.blockNumber,
+   467→   467→      last_real_tx_hash: receipt.hash,           // preserved across later failures
+   468→   468→      last_real_block: receipt.blockNumber,
+   469→   469→      last_real_at: new Date().toISOString(),
+   470→   470→      last_signal_value: signal.signal_value, last_signal_type: signal.signal_type,
+   471→   471→      updated_at: new Date().toISOString(),
+   472→   472→      last_error: null,
+   473→   473→    };
+   474→   474→    persistRelayerState();
+   475→   475→    return { ok: true, hash: receipt.hash };
+
+[showing lines 36-475 of 687; use offset=476 with limit to continue reading]

@@ -1,0 +1,796 @@
+     1→/**
+     2→ * Validators, 0G Integration, Infrastructure, Agent, Protocol, CEX, Explorers Pages
+     3→ */
+     4→'use client';
+     5→
+     6→import { useState } from 'react';
+     7→import { Card, StatCard, ProgressBar, Badge, DataTable, KVList, EmptyState, Tag } from '../components/ui';
+     8→import { useAPI, useStream } from '../lib/hooks';
+     9→import { fetchAPI, fmt, pct, tfmt, dtfmt, truncate, hex, compact, statusColor, ms, cleanText } from '../lib/api';
+    10→import * as Icons from 'lucide-react';
+    11→
+    12→const DEFAULT_ENTITY = '0x2e49c1ff182bea5e33246a5f88f78cab6108cdde7b14f73bf8f7a06d6940c6ec';
+    13→
+    14→// ════════════════════════════════════════════════════════════════════════════
+    15→// VALIDATORS
+    16→// ════════════════════════════════════════════════════════════════════════════
+    17→
+    18→export function ValidatorsPage() {
+    19→  const { data: hhi } = useAPI('/api/v1/validator/hhi', 15000);
+    20→  const { data: dwBft } = useAPI('/api/v1/dw_bft', 30000);
+    21→  const { data: sigma } = useAPI(`/api/v1/sigma/${DEFAULT_ENTITY}`, 10000);
+    22→
+    23→  return (
+    24→    <div className="space-y-6">
+    25→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    26→        <StatCard label="Validators" value={fmt(sigma?.validator_count || 0)} sub="registered" color="blue" />
+    27→        <StatCard label="Sigma(t)" value={(sigma?.sigma || 0.25).toFixed(4)} color={sigma?.bootstrap ? 'amber' : 'green'} />
+    28→        <StatCard label="HHI" value={fmt(hhi?.hhi || 0, 0)} sub={hhi?.hhi_status || '-'} color={hhi?.hhi < 2500 ? 'green' : 'red'} />
+    29→        <StatCard label="Continents" value={`${hhi?.continent_count || 0}/4`} color={hhi?.continents_ok ? 'green' : 'amber'} />
+    30→      </div>
+    31→
+    32→      <Card title="Validator Registry - Launch Threshold" live>
+    33→        <div className="text-center py-4">
+    34→          <div className="text-3xl font-bold">{fmt(sigma?.validator_count || 0)} / 100</div>
+    35→          <div className="text-sm text-muted-foreground mt-2">validators registered (whitepaper section4 launch threshold)</div>
+    36→        </div>
+    37→        <ProgressBar value={sigma?.validator_count || 0} max={100} color="blue" label="Launch readiness" showValue />
+    38→        <div className="mt-3 text-center">
+    39→          <Badge status={sigma?.bootstrap ? 'BOOTSTRAP' : 'LAUNCH_READY'} />
+    40→        </div>
+    41→      </Card>
+    42→
+    43→      <Card title="HHI Distribution" live>
+    44→        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2 mb-4">
+    45→          {['AF', 'AN', 'AS', 'EU', 'NA', 'OC', 'SA'].map(c => {
+    46→            const count = hhi?.continent_breakdown?.[c] || 0;
+    47→            return (
+    48→              <div key={c} className={`p-3 rounded text-center border ${count > 0 ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/30 border-border'}`}>
+    49→                <div className="text-sm font-semibold">{c}</div>
+    50→                <div className="text-lg font-mono">{count}</div>
+    51→              </div>
+    52→            );
+    53→          })}
+    54→        </div>
+    55→        <KVList items={[
+    56→          ['F8 violation', hhi?.f8_violation ? 'YES' : 'NO'],
+    57→          ['Consensus paused', hhi?.consensus_paused ? 'YES' : 'NO'],
+    58→          ['Auto response', hhi?.auto_response || '-'],
+    59→        ]} />
+    60→      </Card>
+    61→
+    62→      <Card title="DW-BFT Consensus" live>
+    63→        <KVList items={[
+    64→          ['Consensus value', (dwBft?.consensus_value || 0).toFixed(4)],
+    65→          ['Byzantine effective weight', (dwBft?.byzantine_effective_weight || 0).toFixed(4)],
+    66→          ['Consensus window delta(t)', (dwBft?.consensus_window_delta || 0).toFixed(4)],
+    67→          ['Safety proof', dwBft?.bft_safety_proof || '-'],
+    68→        ]} />
+    69→      </Card>
+    70→    </div>
+    71→  );
+    72→}
+    73→
+    74→export function ValidatorHHIPage() { return <ValidatorsPage />; }
+    75→
+    76→// ════════════════════════════════════════════════════════════════════════════
+    77→// ANNOTATORS
+    78→// ════════════════════════════════════════════════════════════════════════════
+    79→
+    80→export function AnnotatorsPage() {
+    81→  return (
+    82→    <div className="space-y-6">
+    83→      <Card title="K-Plane Annotation Network" live>
+    84→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    85→          <StatCard label="Bootstrap K" value="0.10" sub="baseline" color="amber" />
+    86→          <StatCard label="Quorum" value="3-of-5" sub="majority" color="blue" />
+    87→          <StatCard label="ACP Protections" value="6" sub="active" color="green" />
+    88→          <StatCard label="Terms" value="12 months" sub="rotating" color="purple" />
+    89→        </div>
+    90→      </Card>
+    91→
+    92→      <Card title="Annotation Lifecycle">
+    93→        <div className="flex items-center justify-between gap-2 mb-4">
+    94→          {['COMMIT', 'REVEAL', 'VOTE', 'TALLY'].map((s, i) => (
+    95→            <div key={s} className="flex-1 p-3 rounded border-2 border-blue-500/30 bg-blue-500/5 text-center">
+    96→              <div className="text-xs font-semibold">{i + 1}. {s}</div>
+    97→            </div>
+    98→          ))}
+    99→        </div>
+   100→        <div className="text-sm text-muted-foreground">
+   101→          Commit-reveal voting prevents herding - annotators submit hash commitments before the reveal window opens.
+   102→        </div>
+   103→      </Card>
+   104→    </div>
+   105→  );
+   106→}
+   107→
+   108→// ════════════════════════════════════════════════════════════════════════════
+   109→// BOOTSTRAP STATUS
+   110→// ════════════════════════════════════════════════════════════════════════════
+   111→
+   112→export function BootstrapPage() {
+   113→  const { data: bs } = useAPI('/api/v1/bootstrap/status', 15000);
+   114→
+   115→  return (
+   116→    <div className="space-y-6">
+   117→      <Card title="Bootstrap Protocol - e^(-lambda * D)" live>
+   118→        <div className="text-center py-4">
+   119→          <div className="text-5xl font-bold text-blue-500">{pct(bs?.bootstrap_weight, 3)}</div>
+   120→          <div className="text-sm text-muted-foreground mt-2">bootstrap weight (lower = more mature)</div>
+   121→        </div>
+   122→        <ProgressBar value={1 - (bs?.bootstrap_weight || 1)} color="green" label="Protocol maturity" showValue />
+   123→        <div className="mt-4">
+   124→          <KVList items={[
+   125→            ['Akashic depth Behavioral Depth', fmt(bs?.akashic_depth)],
+   126→            ['Depth for full transition', fmt(bs?.depth_for_full_transition)],
+   127→            ['Decay rate lambda', '0.0001'],
+   128→            ['Formula', 'bootstrap_weight(t) = e^(-0.0001 * Behavioral Depth)'],
+   129→            ['Disclosure', cleanText(bs?.disclosure) || '-'],
+   130→          ]} />
+   131→        </div>
+   132→      </Card>
+   133→    </div>
+   134→  );
+   135→}
+   136→
+   137→// ════════════════════════════════════════════════════════════════════════════
+   138→// REPUTATION
+   139→// ════════════════════════════════════════════════════════════════════════════
+   140→
+   141→export function ReputationPage() {
+   142→  const [entityId, setEntityId] = useState(DEFAULT_ENTITY);
+   143→  const { data: rep } = useAPI(`/api/v1/reputation/${entityId}`, 15000);
+   144→  const { data: lb } = useAPI('/api/v1/reputation/leaderboard', 30000);
+   145→
+   146→  return (
+   147→    <div className="space-y-6">
+   148→      <Card title="Entity Selector">
+   149→        <input
+   150→          type="text"
+   151→          value={entityId}
+   152→          onChange={e => setEntityId(e.target.value)}
+   153→          className="w-full px-3 py-2 rounded-lg border border-border bg-input text-sm font-mono"
+   154→        />
+   155→      </Card>
+   156→
+   157→      {rep && (
+   158→        <Card title={`Reputation - ${truncate(entityId, 16)}`} live>
+   159→          <KVList items={[
+   160→            ['Credit score', (rep.credit_score || 0).toFixed(4)],
+   161→            ['Avg coherence', pct(rep.avg_coherence, 2)],
+   162→            ['Active days', fmt(rep.active_days)],
+   163→            ['Dispute count', fmt(rep.dispute_count)],
+   164→            ['Cross-chain consistency', pct(rep.cross_chain_consistency, 2)],
+   165→          ]} />
+   166→        </Card>
+   167→      )}
+   168→
+   169→      <Card title="Reputation Leaderboard" live>
+   170→        <DataTable
+   171→          headers={['#', 'Entity', 'Credit Score', 'Active Days']}
+   172→          rows={(lb?.leaderboard || []).slice(0, 15).map((e: any, i: number) => [
+   173→            i + 1,
+   174→            truncate(e.entity_id, 16),
+   175→            (e.credit_score || 0).toFixed(4),
+   176→            fmt(e.active_days),
+   177→          ])}
+   178→          emptyMessage="Loading leaderboard..."
+   179→        />
+   180→      </Card>
+   181→    </div>
+   182→  );
+   183→}
+   184→
+   185→// ════════════════════════════════════════════════════════════════════════════
+   186→// 0G INTEGRATION
+   187→// ════════════════════════════════════════════════════════════════════════════
+   188→
+   189→export function ZeroGFullStackPage() {
+   190→  const { data: fs } = useAPI('/api/v1/zg/full_stack', 15000);
+   191→
+   192→  return (
+   193→    <div className="space-y-6">
+   194→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   195→        <StatCard label="BH Records" value={fmt(fs?.bh_records)} color="blue" />
+   196→        <StatCard label="Chains Indexed" value={fmt(fs?.chains_indexed)} color="green" />
+   197→        <StatCard label="API Routes" value={fmt(fs?.api_routes)} color="purple" />
+   198→        <StatCard label="Components" value={fmt(Object.keys(fs?.components || {}).length)} color="amber" />
+   199→      </div>
+   200→
+   201→      <Card title="0G Full Stack Integration" live>
+   202→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   203→          <div>
+   204→            <div className="text-xs text-muted-foreground mb-2">Architecture</div>
+   205→            <pre className="bg-muted/50 rounded p-3 text-xs font-mono overflow-auto max-h-60">
+   206→              {JSON.stringify(fs?.architecture || {}, null, 2)}
+   207→            </pre>
+   208→          </div>
+   209→          <div>
+   210→            <div className="text-xs text-muted-foreground mb-2">Components</div>
+   211→            <pre className="bg-muted/50 rounded p-3 text-xs font-mono overflow-auto max-h-60">
+   212→              {JSON.stringify(fs?.components || {}, null, 2)}
+   213→            </pre>
+   214→          </div>
+   215→        </div>
+   216→      </Card>
+   217→    </div>
+   218→  );
+   219→}
+   220→
+   221→export function ZeroGStoragePage() {
+   222→  const { data: storage } = useAPI('/api/v1/zg/storage/root', 15000);
+   223→  return (
+   224→    <Card title="0G Storage Root" live>
+   225→      <KVList items={[
+   226→        ['Root hash', hex(storage?.root, 16)],
+   227→        ['OK', storage?.ok ? 'YES' : 'NO'],
+   228→        ['Error', storage?.error || '-'],
+   229→      ]} />
+   230→    </Card>
+   231→  );
+   232→}
+   233→
+   234→export function ZeroGDAPage() {
+   235→  const { data: da } = useAPI('/api/v1/zg/da/status', 15000);
+   236→  return (
+   237→    <Card title="0G Data Availability Layer" live>
+   238→      <KVList items={[
+   239→        ['Status', da?.ok ? 'OK' : 'ERROR'],
+   240→        ['Error', da?.error || '-'],
+   241→      ]} />
+   242→    </Card>
+   243→  );
+   244→}
+   245→
+   246→export function ZeroGComputePage() {
+   247→  const { data: comp } = useAPI('/api/v1/zg/compute/status', 15000);
+   248→  return (
+   249→    <Card title="0G Compute (TEE-verified inference)" live>
+   250→      <KVList items={[
+   251→        ['Status', comp?.ok ? 'OK' : 'ERROR'],
+   252→        ['Error', comp?.error || '-'],
+   253→      ]} />
+   254→    </Card>
+   255→  );
+   256→}
+   257→
+   258→export function ZeroGChainPage() {
+   259→  const { data: chain } = useAPI('/api/v1/zg/chain/status', 15000);
+   260→  return (
+   261→    <Card title="0G Chain Status" live>
+   262→      <KVList items={[
+   263→        ['Status', chain?.ok ? 'OK' : 'ERROR'],
+   264→        ['Error', chain?.error || '-'],
+   265→      ]} />
+   266→    </Card>
+   267→  );
+   268→}
+   269→
+   270→export function ZeroGProofPage() {
+   271→  const { data: proof } = useAPI('/api/v1/zg/proof', 15000);
+   272→  return (
+   273→    <Card title="0G Proof - Behavioral Coverage" live>
+   274→      <KVList items={[
+   275→        ['Chain', proof?.chain || '-'],
+   276→        ['Chain ID', fmt(proof?.chain_id)],
+   277→        ['Deploy block', fmt(proof?.deploy_block)],
+   278→        ['DA proof', hex(proof?.da_proof, 16)],
+   279→        ['Behavioral coverage', pct(proof?.behavioral_coverage, 2)],
+   280→      ]} />
+   281→    </Card>
+   282→  );
+   283→}
+   284→
+   285→export function ZeroGVMFamiliesPage() {
+   286→  const { data: vm } = useAPI('/api/v1/zg/vm-families', 30000);
+   287→  return (
+   288→    <Card title="VM Families - 14 Total" live>
+   289→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   290→        <StatCard label="Total Chains" value={fmt(vm?.total_chains)} color="blue" />
+   291→        <StatCard label="VM Families" value={fmt(vm?.total_vm_families)} color="purple" />
+   292→        <StatCard label="FAISS Dimensions" value={fmt(vm?.faiss_dimensions)} />
+   293→        <StatCard label="Behavioral Planes/VM" value={fmt(vm?.behavioral_planes_per_vm)} color="green" />
+   294→      </div>
+   295→    </Card>
+   296→  );
+   297→}
+   298→
+   299→// ════════════════════════════════════════════════════════════════════════════
+   300→// INFRASTRUCTURE
+   301→// ════════════════════════════════════════════════════════════════════════════
+   302→
+   303→export function ChainsPage() {
+   304→  const { data: chains } = useAPI('/api/v1/chains', 15000);
+   305→  const [search, setSearch] = useState('');
+   306→
+   307→  const filtered = (chains?.chains || []).filter((c: any) =>
+   308→    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+   309→    c.vm?.toLowerCase().includes(search.toLowerCase())
+   310→  );
+   311→
+   312→  return (
+   313→    <div className="space-y-6">
+   314→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   315→        <StatCard label="Total Chains" value={fmt(chains?.total)} color="blue" />
+   316→        <StatCard label="Indexed" value={fmt(chains?.indexed)} color="green" />
+   317→        <StatCard label="Live" value={fmt(chains?.live)} color="green" />
+   318→        <StatCard label="VM Families" value="14" color="purple" />
+   319→      </div>
+   320→
+   321→      <Card title="Chain Coverage" live>
+   322→        <input
+   323→          className="w-full max-w-sm mb-4 px-3 py-2 rounded-lg border border-border bg-input text-sm"
+   324→          placeholder="Search chains..."
+   325→          value={search}
+   326→          onChange={e => setSearch(e.target.value)}
+   327→        />
+   328→        <DataTable
+   329→          headers={['Chain', 'VM', 'Chain ID', 'Status']}
+   330→          rows={filtered.map((c: any) => [
+   331→            c.name, c.vm, c.chain_id || '-', <Badge status={c.status || 'LIVE'} />,
+   332→          ])}
+   333→          emptyMessage="Loading chains..."
+   334→        />
+   335→      </Card>
+   336→    </div>
+   337→  );
+   338→}
+   339→
+   340→export function TimescalePage() {
+   341→  const { data: tsdb } = useAPI('/api/v1/tsdb/stats', 15000);
+   342→  const { data: info } = useAPI('/api/v1/information/conservation', 15000);
+   343→
+   344→  return (
+   345→    <div className="space-y-6">
+   346→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   347→        <StatCard label="Backend" value={tsdb?.backend || 'sqlite'} color="blue" />
+   348→        <StatCard label="Connected" value={tsdb?.connected ? 'YES' : 'NO'} color={tsdb?.connected ? 'green' : 'red'} />
+   349→        <StatCard label="Total Records" value={fmt(tsdb?.total_records)} color="green" />
+   350→        <StatCard label="Conservation" value={info?.has_violations === false ? 'OK' : 'CHECK'} color={info?.has_violations === false ? 'green' : 'amber'} />
+   351→      </div>
+   352→
+   353→      <Card title="TimescaleDB / SQLite Backend" live>
+   354→        <KVList items={[
+   355→          ['Backend', tsdb?.backend || '-'],
+   356→          ['Connected', tsdb?.connected ? 'YES' : 'NO'],
+   357→          ['Total records', fmt(tsdb?.total_records)],
+   358→          ['Message', tsdb?.message || '-'],
+   359→        ]} />
+   360→      </Card>
+   361→
+   362→      <Card title="Information Conservation (L9.2)" live>
+   363→        <KVList items={[
+   364→          ['I_TRION', fmt(info?.I_total || info?.I_current)],
+   365→          ['BH Generated', fmt(info?.bh_generated)],
+   366→          ['Signals Emitted', fmt(info?.s_emitted || info?.I_out)],
+   367→          ['Violations', info?.has_violations ? 'YES' : '0'],
+   368→        ]} />
+   369→      </Card>
+   370→    </div>
+   371→  );
+   372→}
+   373→
+   374→export function KVStorePage() {
+   375→  const { data: kv } = useAPI('/api/v1/kv/status', 15000);
+   376→  return (
+   377→    <Card title="0G KV Store Status" live>
+   378→      <KVList items={[
+   379→        ['Component', kv?.component || '-'],
+   380→        ['Gate Chain', kv?.gate_chain || '-'],
+   381→        ['Gate Contract', hex(kv?.gate_contract, 16)],
+   382→        ['Latency Target', `${kv?.latency_target_ms || 0}ms`],
+   383→        ['Integration Note', kv?.integration_note || '-'],
+   384→      ]} />
+   385→    </Card>
+   386→  );
+   387→}
+   388→
+   389→export function BackfillPage() {
+   390→  const { data: bf } = useAPI('/api/v1/backfill/status', 30000);
+   391→  return (
+   392→    <Card title="Backfill Status" live>
+   393→      <KVList items={[
+   394→        ['Total chains', fmt(bf?.total_chains)],
+   395→        ['Total indexed', fmt(bf?.total_indexed)],
+   396→        ['Timestamp', dtfmt(bf?.timestamp)],
+   397→      ]} />
+   398→    </Card>
+   399→  );
+   400→}
+   401→
+   402→export function RelayersPage() {
+   403→  const { data: rel } = useAPI('/api/v1/relayers/status', 15000);
+   404→  return (
+   405→    <Card title="Relayer Status" live>
+   406→      <DataTable
+   407→        headers={['Relayer', 'Status']}
+   408→        rows={Object.entries(rel || {}).filter(([k]) => k !== 'timestamp').map(([k, v]: any) => [
+   409→          k.replace(/_/g, ' '),
+   410→          <Badge status={v?.ok || v?.status || 'OPERATIONAL'} />,
+   411→        ])}
+   412→      />
+   413→    </Card>
+   414→  );
+   415→}
+   416→
+   417→export function DependencyGraphPage() {
+   418→  const { data: dg } = useAPI('/api/v1/dependency_graph', 30000);
+   419→  return (
+   420→    <Card title="Dependency Graph" live>
+   421→      <div className="space-y-3">
+   422→        <div>
+   423→          <div className="text-xs text-muted-foreground mb-2">Tier-1 Protocols</div>
+   424→          <div className="flex flex-wrap gap-2">
+   425→            {(dg?.tier_1_protocols || []).map((p: any) => <Tag key={p} color="blue">{p}</Tag>)}
+   426→          </div>
+   427→        </div>
+   428→        <div>
+   429→          <div className="text-xs text-muted-foreground mb-2">Cascade Paths</div>
+   430→          <div className="max-h-40 overflow-auto">
+   431→            {(dg?.cascade_paths || []).slice(0, 10).map((p: any, i: number) => (
+   432→              <div key={i} className="text-xs font-mono py-1 border-b border-border/30">
+   433→                {Array.isArray(p) ? p.join(' -> ') : JSON.stringify(p)}
+   434→              </div>
+   435→            ))}
+   436→          </div>
+   437→        </div>
+   438→      </div>
+   439→    </Card>
+   440→  );
+   441→}
+   442→
+   443→export function SDKSpecPage() {
+   444→  const { data: sdk } = useAPI('/api/v1/sdk/spec', 60000);
+   445→  return (
+   446→    <Card title="SDK Specification" live>
+   447→      <KVList items={[
+   448→        ['Base URL', sdk?.base_url || '-'],
+   449→        ['Chains indexed', fmt(sdk?.chains_indexed)],
+   450→        ['Falsifiability conditions', fmt(sdk?.falsifiability_conditions)],
+   451→        ['Auth', sdk?.auth || '-'],
+   452→      ]} />
+   453→      <div className="mt-4">
+   454→        <div className="text-xs text-muted-foreground mb-2">Core Endpoints</div>
+   455→        <div className="max-h-60 overflow-auto">
+   456→          {(sdk?.core_endpoints || []).map((e: any, i: number) => (
+   457→            <div key={i} className="text-xs font-mono py-1 border-b border-border/30">
+   458→              {typeof e === 'string' ? e : JSON.stringify(e)}
+   459→            </div>
+   460→          ))}
+   461→        </div>
+   462→      </div>
+   463→    </Card>
+   464→  );
+   465→}
+   466→
+   467→export function TokenPage() {
+   468→  const { data: util } = useAPI('/api/v1/token/utility', 30000);
+   469→  return (
+   470→    <Card title="Token Utility" live>
+   471→      <KVList items={[
+   472→        ['Token', util?.token || 'TRION'],
+   473→        ['Chain', util?.chain || '-'],
+   474→        ['Total supply', fmt(util?.total_supply)],
+   475→        ['Initial distribution', fmt(util?.initial_dist)],
+   476→      ]} />
+   477→    </Card>
+   478→  );
+   479→}
+   480→
+   481→export function TokenDistributionPage() {
+   482→  const { data: dist } = useAPI('/api/v1/token/distribution', 30000);
+   483→  return (
+   484→    <Card title="Token Distribution & Public Good Charter" live>
+   485→      <KVList items={[
+   486→        ['Public good enforcement', dist?.public_good_enforcement ? 'YES' : 'NO'],
+   487→        ['Inflation cap', `${dist?.inflation?.cap_pct || 2}%/yr`],
+   488→        ['Launch conditions', dist?.launch_conditions || '-'],
+   489→      ]} />
+   490→      <div className="mt-4">
+   491→        <div className="text-xs text-muted-foreground mb-2">Allocation</div>
+   492→        <pre className="bg-muted/50 rounded p-3 text-xs font-mono">
+   493→          {JSON.stringify(dist?.allocation || {}, null, 2)}
+   494→        </pre>
+   495→      </div>
+   496→    </Card>
+   497→  );
+   498→}
+   499→
+   500→export function RevenuePage() {
+   501→  const { data: rev } = useAPI('/api/v1/trion/revenue', 30000);
+   502→  return (
+   503→    <Card title="Revenue Model" live>
+   504→      <KVList items={[
+   505→        ['TAM estimate', rev?.tam_estimate || '-'],
+   506→        ['Thesis', rev?.thesis || '-'],
+   507→      ]} />
+   508→      <div className="mt-4">
+   509→        <div className="text-xs text-muted-foreground mb-2">Revenue Streams</div>
+   510→        <DataTable
+   511→          headers={['Stream', 'Description']}
+   512→          rows={(rev?.revenue_streams || []).map((s: any) => [s.name || s, s.description || '-'])}
+   513→          emptyMessage="Loading streams..."
+   514→        />
+   515→      </div>
+   516→    </Card>
+   517→  );
+   518→}
+   519→
+   520→// ════════════════════════════════════════════════════════════════════════════
+   521→// AI AGENT
+   522→// ════════════════════════════════════════════════════════════════════════════
+   523→
+   524→export function AgentPage() {
+   525→  const { data: agents } = useAPI('/api/v1/agents', 15000);
+   526→  const [entityId, setEntityId] = useState(DEFAULT_ENTITY);
+   527→  const { data: agentId } = useAPI(`/api/v1/agent_id/${entityId}`, 15000);
+   528→
+   529→  return (
+   530→    <div className="space-y-6">
+   531→      <Card title="Entity -> Agent ID Resolver">
+   532→        <input
+   533→          type="text"
+   534→          value={entityId}
+   535→          onChange={e => setEntityId(e.target.value)}
+   536→          className="w-full px-3 py-2 rounded-lg border border-border bg-input text-sm font-mono"
+   537→        />
+   538→      </Card>
+   539→      {agentId && (
+   540→        <Card title="Agent ID" live>
+   541→          <KVList items={[
+   542→            ['Agent ID', hex(agentId.agent_id, 16)],
+   543→            ['Entity ID', hex(agentId.entity_id, 16)],
+   544→            ['Generation', fmt(agentId.generation)],
+   545→          ]} />
+   546→        </Card>
+   547→      )}
+   548→      <Card title="All Agents" live>
+   549→        <DataTable
+   550→          headers={['Agent ID', 'Status']}
+   551→          rows={(agents?.agents || []).slice(0, 15).map((a: any) => [
+   552→            hex(a.agent_id || a.id, 14),
+   553→            <Badge status={a.status || 'ACTIVE'} />,
+   554→          ])}
+   555→          emptyMessage="Loading agents..."
+   556→        />
+   557→      </Card>
+   558→    </div>
+   559→  );
+   560→}
+   561→
+   562→export function AgentsPage() { return <AgentPage />; }
+   563→export function AgentValidatePage() { return <AgentPage />; }
+   564→
+   565→export function InvestPage() {
+   566→  const [entityId, setEntityId] = useState(DEFAULT_ENTITY);
+   567→  const { data: invest } = useAPI(`/api/v1/invest/${entityId}`, 15000);
+   568→  return (
+   569→    <div className="space-y-6">
+   570→      <Card title="Investment Scanner">
+   571→        <input
+   572→          type="text"
+   573→          value={entityId}
+   574→          onChange={e => setEntityId(e.target.value)}
+   575→          className="w-full px-3 py-2 rounded-lg border border-border bg-input text-sm font-mono"
+   576→        />
+   577→      </Card>
+   578→      {invest && (
+   579→        <Card title="Investment Analysis" live>
+   580→          <KVList items={[
+   581→            ['Recommendation', invest.recommendation || '-'],
+   582→            ['Risk score', (invest.risk_score || 0).toFixed(4)],
+   583→            ['Expected return', pct(invest.expected_return, 2)],
+   584→            ['Coherence', (invest.coherence || 0).toFixed(4)],
+   585→          ]} />
+   586→        </Card>
+   587→      )}
+   588→    </div>
+   589→  );
+   590→}
+   591→
+   592→export function IntelligenceMaintenancePage() {
+   593→  const { data: im } = useAPI('/api/v1/intelligence_maintenance', 15000);
+   594→  return (
+   595→    <Card title="Intelligence Maintenance - IM Score" live>
+   596→      <KVList items={[
+   597→        ['IM score', (im?.im_score || 0).toFixed(4)],
+   598→        ['Threshold', (im?.IM_threshold || 0).toFixed(4)],
+   599→        ['Detection window (h)', fmt(im?.detection_window_h)],
+   600→        ['Last full audit', im?.last_full_audit || '-'],
+   601→      ]} />
+   602→    </Card>
+   603→  );
+   604→}
+   605→
+   606→// ════════════════════════════════════════════════════════════════════════════
+   607→// PROTOCOL HEALTH
+   608→// ════════════════════════════════════════════════════════════════════════════
+   609→
+   610→export function ProtocolPage() {
+   611→  const { data: monitor } = useAPI('/api/v1/protocol/monitor/status', 15000);
+   612→  return (
+   613→    <div className="space-y-6">
+   614→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   615→        <StatCard label="Watched Protocols" value={fmt(monitor?.watched_protocols?.length || 0)} color="blue" />
+   616→        <StatCard label="Monitor Active" value={monitor?.monitor_active ? 'YES' : 'NO'} color={monitor?.monitor_active ? 'green' : 'red'} />
+   617→        <StatCard label="Poll Interval" value={`${monitor?.poll_interval_seconds || 60}s`} />
+   618→        <StatCard label="Status" value={monitor?.status || '-'} color="green" />
+   619→      </div>
+   620→      <Card title="Protocol Monitor States" live>
+   621→        <DataTable
+   622→          headers={['Protocol', 'Protocol Health', 'Grade', 'Reason']}
+   623→          rows={(monitor?.states || []).map((s: any) => [
+   624→            s.protocol_name || s.name,
+   625→            (s.h_score || 0).toFixed(4),
+   626→            <Badge status={s.grade} />,
+   627→            s.reason || '-',
+   628→          ])}
+   629→          emptyMessage="Loading states..."
+   630→        />
+   631→      </Card>
+   632→    </div>
+   633→  );
+   634→}
+   635→
+   636→export function ProtocolRolesPage() {
+   637→  const { data: roles } = useAPI('/api/v1/protocol/supported-roles', 30000);
+   638→  return (
+   639→    <Card title="Supported Protocol Roles" live>
+   640→      <div className="flex flex-wrap gap-2">
+   641→        {(roles?.roles || []).map((r: any) => (
+   642→          <Tag key={r} color="blue">{r}</Tag>
+   643→        ))}
+   644→      </div>
+   645→    </Card>
+   646→  );
+   647→}
+   648→
+   649→export function SelfVerificationPage() {
+   650→  const { data: self } = useAPI('/api/v1/self', 15000);
+   651→  return (
+   652→    <Card title="TRION Self-Verification" live>
+   653→      <KVList items={[
+   654→        ['Entity ID', hex(self?.entity_id, 16)],
+   655→        ['Coherence', (self?.coherence || 0).toFixed(4)],
+   656→        ['Genomic generation', fmt(self?.genomic_generation)],
+   657→        ['Created at', dtfmt(self?.created_at)],
+   658→      ]} />
+   659→    </Card>
+   660→  );
+   661→}
+   662→
+   663→// ════════════════════════════════════════════════════════════════════════════
+   664→// CEX
+   665→// ════════════════════════════════════════════════════════════════════════════
+   666→
+   667→export function CEXPage() {
+   668→  const { data: status } = useAPI('/api/v1/cex/status', 15000);
+   669→  return (
+   670→    <Card title="CEX Integration Status" live>
+   671→      <KVList items={[
+   672→        ['Coverage', status?.coverage || '-'],
+   673→        ['CEX registry count', fmt(status?.cex_registry?.length)],
+   674→        ['Feed endpoint', status?.feed_endpoint || '-'],
+   675→        ['Hostile endpoint', status?.hostile_endpoint || '-'],
+   676→        ['Inbound from CEX', status?.inbound_from_cex ? 'YES' : 'NO'],
+   677→      ]} />
+   678→    </Card>
+   679→  );
+   680→}
+   681→
+   682→export function CEXFeedPage() {
+   683→  const { data: feed } = useAPI('/api/v1/cex/feed', 10000);
+   684→  return (
+   685→    <Card title="CEX Feed" live>
+   686→      <KVList items={[
+   687→        ['Feed type', feed?.feed_type || '-'],
+   688→        ['Feed version', feed?.feed_version || '-'],
+   689→        ['Refresh interval (s)', fmt(feed?.refresh_interval_seconds)],
+   690→        ['Signals count', fmt(feed?.signals?.length)],
+   691→      ]} />
+   692→    </Card>
+   693→  );
+   694→}
+   695→
+   696→export function CEXAlertsPage() {
+   697→  const { data: alerts } = useAPI('/api/v1/cex/alerts', 10000);
+   698→  return (
+   699→    <Card title="CEX Alerts" live>
+   700→      <KVList items={[
+   701→        ['Total in window', fmt(alerts?.total_in_window)],
+   702→        ['Returned', fmt(alerts?.returned)],
+   703→        ['Query', alerts?.query || '-'],
+   704→      ]} />
+   705→    </Card>
+   706→  );
+   707→}
+   708→
+   709→export function CEXStatsPage() {
+   710→  const { data: stats } = useAPI('/api/v1/cex/stats', 15000);
+   711→  return (
+   712→    <Card title="CEX Statistics" live>
+   713→      <KVList items={[
+   714→        ['Active webhooks', fmt(stats?.active_webhooks)],
+   715→        ['By CEX count', fmt(Object.keys(stats?.by_cex || {}).length)],
+   716→        ['By asset (top 20)', fmt(Object.keys(stats?.by_asset_top20 || {}).length)],
+   717→        ['By event type', fmt(Object.keys(stats?.by_event_type || {}).length)],
+   718→      ]} />
+   719→    </Card>
+   720→  );
+   721→}
+   722→
+   723→// ════════════════════════════════════════════════════════════════════════════
+   724→// EXPLORERS
+   725→// ════════════════════════════════════════════════════════════════════════════
+   726→
+   727→export function LeaderboardPage() {
+   728→  const { data: lb } = useAPI('/api/v1/leaderboard', 10000);
+   729→  return (
+   730→    <Card title="Coherence Leaderboard" live>
+   731→      <DataTable
+   732→        headers={['#', 'Entity', 'Coherence', 'Archetype', 'Coherent']}
+   733→        rows={(lb?.leaderboard || []).map((e: any, i: number) => [
+   734→          e.rank || i + 1,
+   735→          truncate(e.label || e.entity_id, 24),
+   736→          <span className={e.coherent ? 'text-green-500 font-mono' : 'text-red-500 font-mono'}>{pct(e.coherence_score, 2)}</span>,
+   737→          <Badge status={e.archetype} />,
+   738→          e.coherent ? '✓' : '✗',
+   739→        ])}
+   740→        emptyMessage="Loading leaderboard..."
+   741→      />
+   742→    </Card>
+   743→  );
+   744→}
+   745→
+   746→export function FeedPage() {
+   747→  const { items, speedMs } = useStream('/api/v1/feed', 3000);
+   748→  return (
+   749→    <Card title="Live Signal Feed" subtitle={`Streaming at ~${ms(speedMs)}`} live>
+   750→      <DataTable
+   751→        headers={['Time', 'Entity', 'Type', 'Score', 'Grade']}
+   752→        rows={items.slice(0, 50).map((s: any) => [
+   753→          tfmt(s.timestamp),
+   754→          truncate(s.protocol_name || s.entity_id, 16),
+   755→          s.signal_type || '-',
+   756→          <span className="font-mono">{pct(s.coherence_score, 2)}</span>,
+   757→          <Badge status={s.grade} />,
+   758→        ])}
+   759→        emptyMessage="Awaiting feed..."
+   760→      />
+   761→    </Card>
+   762→  );
+   763→}
+   764→
+   765→export function AuditPatternsPage() {
+   766→  const { data: patterns } = useAPI('/api/v1/audit/patterns', 30000);
+   767→  return (
+   768→    <Card title="Audit Patterns" live>
+   769→      <DataTable
+   770→        headers={['Pattern', 'Category', 'Severity']}
+   771→        rows={(patterns?.patterns || []).map((p: any) => [
+   772→          p.name || p.id,
+   773→          p.category || '-',
+   774→          <Badge status={p.severity || 'WARNING'} />,
+   775→        ])}
+   776→        emptyMessage="Loading patterns..."
+   777→      />
+   778→    </Card>
+   779→  );
+   780→}
+   781→
+   782→export function DemoPage() {
+   783→  const { data: demo } = useAPI('/api/v1/demo/simulate_attack', 30000);
+   784→  return (
+   785→    <Card title="Demo Attack Simulator" live>
+   786→      <KVList items={[
+   787→        ['Attack', demo?.attack || '-'],
+   788→        ['Attacker', hex(demo?.attacker_address, 14)],
+   789→        ['Date', demo?.date || '-'],
+   790→        ['Detection lead time', `${fmt(demo?.detection_lead_time_hours)}h`],
+   791→        ['Description', truncate(demo?.description, 60)],
+   792→      ]} />
+   793→    </Card>
+   794→  );
+   795→}
+   796→

@@ -1,0 +1,702 @@
+     1→"""
+     2→TRION ANIMA Intelligence Engine — L3.3 through L3.7 Complete
+     3→=============================================================
+     4→Implements the full ANIMA intelligence layer as specified in the TRION whitepaper.
+     5→
+     6→  L3.3  ANIMA Score  A(t) = PCR(t) × HA(t) × CA(t)
+     7→  L3.4  Source Credibility  CRED(s,t) with daily decay and event updates
+     8→  L3.5  Reflexivity Dampening  A_adj(t) = A(t) × (1 - β × reflexivity)
+     9→  L3.5  Manifestation Gap Monitor  MG(S,t) = B_predicted - B_observed
+    10→  L3.7  Intelligence Maintenance Protocol  IM auto-retraining on degradation
+    11→
+    12→Data sources crawled:
+    13→  - SEC EDGAR        (regulatory filings — XML-parsed, not hit-count)
+    14→  - GitHub           (commit velocity, contributor growth, issue resolution)
+    15→  - News RSS         (20+ feeds with VADER financial sentiment, not keyword lists)
+    16→  - CFTC / FCA       (regulatory enforcement RSS feeds)
+    17→  - arXiv            (academic preprints cs.CR + q-fin.TR)
+    18→
+    19→Background:
+    20→  APScheduler runs entity crawl cycles every 30 minutes.
+    21→  CRED daily decay runs every 24 hours.
+    22→  Outcome verification runs every 6 hours.
+    23→"""
+    24→
+    25→import os
+    26→import math
+    27→import json
+    28→import time
+    29→import hashlib
+    30→import logging
+    31→import sqlite3
+    32→import threading
+    33→import urllib.request
+    34→import urllib.error
+    35→import urllib.parse
+    36→import xml.etree.ElementTree as ET
+    37→from collections import defaultdict
+    38→from datetime import datetime, timezone, timedelta
+    39→from typing import Dict, List, Optional, Tuple, Any
+    40→
+    41→import numpy as np
+    42→import feedparser
+    43→import httpx
+    44→from apscheduler.schedulers.background import BackgroundScheduler
+    45→from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    46→
+    47→logger = logging.getLogger(__name__)
+    48→
+    49→# ─────────────────────────────────────────────────────────────────────────────
+    50→# Constants — whitepaper-aligned
+    51→# ─────────────────────────────────────────────────────────────────────────────
+    52→
+    53→CRED_DECAY_DAILY        = 0.99      # L3.4: CRED(s,t) = CRED(s,t-1) × 0.99 per day
+    54→CRED_DELTA_VERIFIED     = +1.0      # prediction verified against realized outcome
+    55→CRED_DELTA_FALSIFIED    = -2.0      # prediction falsified
+    56→CRED_DELTA_MANIPULATION = -3.0      # manipulation pattern detected in source output
+    57→CRED_DELTA_CONFLICT     = -5.0      # source correlated with entity's own trading
+    58→CRED_FLAG_THRESHOLD     = 0.30      # below this: flag, human review required
+    59→CRED_EXCLUDE_THRESHOLD  = 0.10      # below this: exclude from CA entirely
+    60→
+    61→HA_WINDOW_DAYS          = 90        # rolling 90-day historical accuracy window
+    62→HA_CORRECT_TOLERANCE    = 0.20      # |actual - predicted| ≤ 0.20 = correct
+    63→HA_FLAG_THRESHOLD       = 0.70      # HA < 0.70 → flag ANIMA output
+    64→HA_DISABLE_THRESHOLD    = 0.60      # HA < 0.60 → A(t) = 0
+    65→
+    66→PCR_SEQUENCE_WINDOW     = 20        # number of records in sequence window for PCR
+    67→PCR_ACTIVE_THRESHOLD    = 0.01      # dimension considered "active" if > 1% of max
+    68→
+    69→REFLEXIVITY_BETA        = 0.50      # L3.5: dampening coefficient
+    70→REFLEXIVITY_FLAG_THR    = 0.30      # flag if reflexivity exceeds this
+    71→REFLEXIVITY_WINDOW_H    = 2         # hours post-publication to measure behavioral change
+    72→
+    73→IM_CHECK_INTERVAL_H     = 24        # check IM every 24 hours
+    74→IM_DEGRADATION_THR      = 0.80      # IM < 0.80 → trigger maintenance
+    75→
+    76→CRAWL_CYCLE_MINUTES     = 30        # background crawl cycle
+    77→OUTCOME_VERIFY_HOURS    = 6         # how often to verify pending predictions
+    78→MANIFEST_WINDOW_HOURS   = 24        # how long after prediction to look for outcome
+    79→
+    80→GITHUB_TOKEN = (
+    81→    os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+    82→    or os.environ.get("GITHUB_TOKEN")
+    83→    or ""
+    84→)
+    85→
+    86→# ─────────────────────────────────────────────────────────────────────────────
+    87→# Named source registry — L3.4
+    88→# Initial CRED values reflect source authority
+    89→# ─────────────────────────────────────────────────────────────────────────────
+    90→
+    91→SOURCES: Dict[str, Dict[str, Any]] = {
+    92→    # Regulatory — highest CRED, authoritative
+    93→    "SEC_EDGAR":      {"initial_cred": 0.92, "category": "regulatory",  "weight": 1.0},
+    94→    "CFTC":           {"initial_cred": 0.94, "category": "regulatory",  "weight": 1.0},
+    95→    "FCA":            {"initial_cred": 0.94, "category": "regulatory",  "weight": 1.0},
+    96→    "ESMA":           {"initial_cred": 0.92, "category": "regulatory",  "weight": 1.0},
+    97→    "MAS":            {"initial_cred": 0.91, "category": "regulatory",  "weight": 1.0},
+    98→    # Developer — high CRED, verifiable commit history
+    99→    "GITHUB":         {"initial_cred": 0.80, "category": "developer",   "weight": 1.0},
+   100→    # Academic — peer-review signal
+   101→    "ARXIV":          {"initial_cred": 0.88, "category": "academic",    "weight": 0.9},
+   102→    # Tier-1 crypto news — established, full-time editorial
+   103→    "COINDESK":       {"initial_cred": 0.72, "category": "news",        "weight": 0.8},
+   104→    "THEBLOCK":       {"initial_cred": 0.74, "category": "news",        "weight": 0.8},
+   105→    "DECRYPT":        {"initial_cred": 0.68, "category": "news",        "weight": 0.7},
+   106→    "COINTELEGRAPH":  {"initial_cred": 0.65, "category": "news",        "weight": 0.7},
+   107→    "REUTERS_CRYPTO": {"initial_cred": 0.82, "category": "news",        "weight": 0.9},
+   108→    "BLOCKWORKS":     {"initial_cred": 0.70, "category": "news",        "weight": 0.75},
+   109→    "THEDEFIANT":     {"initial_cred": 0.68, "category": "news",        "weight": 0.7},
+   110→    "DLNEWS":         {"initial_cred": 0.71, "category": "news",        "weight": 0.75},
+   111→    "PROTOS":         {"initial_cred": 0.66, "category": "news",        "weight": 0.65},
+   112→    "BITCOINMAGAZINE":{"initial_cred": 0.70, "category": "news",        "weight": 0.7},
+   113→    # Tier-2 crypto news — broader coverage, slightly lower editorial bar
+   114→    "CRYPTOBRIEFING": {"initial_cred": 0.63, "category": "news",        "weight": 0.65},
+   115→    "NEWSBTC":        {"initial_cred": 0.60, "category": "news",        "weight": 0.60},
+   116→    "AMBCRYPTO":      {"initial_cred": 0.58, "category": "news",        "weight": 0.55},
+   117→    "BEINCRYPTO":     {"initial_cred": 0.60, "category": "news",        "weight": 0.60},
+   118→    "CRYPTOSLATE":    {"initial_cred": 0.62, "category": "news",        "weight": 0.65},
+   119→    "BITCOINIST":     {"initial_cred": 0.58, "category": "news",        "weight": 0.55},
+   120→    "UTODAY":         {"initial_cred": 0.56, "category": "news",        "weight": 0.55},
+   121→    "DAILYHODL":      {"initial_cred": 0.55, "category": "news",        "weight": 0.50},
+   122→    "CRYPTOPOTATO":   {"initial_cred": 0.57, "category": "news",        "weight": 0.55},
+   123→    "COINJOURNAL":    {"initial_cred": 0.59, "category": "news",        "weight": 0.55},
+   124→    # Cross-domain signals — L6.1 BC, L9.1 XSL, L6.2 BRT (injected by faiss_service)
+   125→    "FORUMS":         {"initial_cred": 0.70, "category": "developer",   "weight": 0.7},
+   126→    "GDELT":          {"initial_cred": 0.75, "category": "news",        "weight": 0.8},
+   127→    "BC_SIGNAL":      {"initial_cred": 0.85, "category": "cross_domain", "weight": 0.9},
+   128→    "XSL_SIGNAL":     {"initial_cred": 0.85, "category": "cross_domain", "weight": 0.9},
+   129→    "BRT_SIGNAL":     {"initial_cred": 0.80, "category": "cross_domain", "weight": 0.8},
+   130→}
+   131→
+   132→NEWS_FEEDS = {
+   133→    # Tier-1 established crypto/finance news with reliable RSS
+   134→    "COINDESK":       "https://www.coindesk.com/arc/outboundfeeds/rss/",
+   135→    "THEBLOCK":       "https://www.theblock.co/rss.xml",
+   136→    "DECRYPT":        "https://decrypt.co/feed",
+   137→    "COINTELEGRAPH":  "https://cointelegraph.com/rss",
+   138→    "BLOCKWORKS":     "https://blockworks.co/feed",
+   139→    "THEDEFIANT":     "https://thedefiant.io/feed",
+   140→    "DLNEWS":         "https://www.dlnews.com/articles/feed/",
+   141→    "PROTOS":         "https://protos.com/feed/",
+   142→    "BITCOINMAGAZINE":"https://bitcoinmagazine.com/.rss/full/",
+   143→    # Tier-2 broader crypto news coverage
+   144→    "CRYPTOBRIEFING": "https://cryptobriefing.com/feed/",
+   145→    "NEWSBTC":        "https://www.newsbtc.com/feed/",
+   146→    "AMBCRYPTO":      "https://ambcrypto.com/feed/",
+   147→    "BEINCRYPTO":     "https://beincrypto.com/feed/",
+   148→    "CRYPTOSLATE":    "https://cryptoslate.com/feed/",
+   149→    "BITCOINIST":     "https://bitcoinist.com/feed/",
+   150→    "UTODAY":         "https://u.today/rss",
+   151→    "DAILYHODL":      "https://dailyhodl.com/feed/",
+   152→    "CRYPTOPOTATO":   "https://cryptopotato.com/feed/",
+   153→    "COINJOURNAL":    "https://coinjournal.net/feed/",
+   154→}
+   155→
+   156→REGULATORY_FEEDS = {
+   157→    # CFTC: enforcementactions.xml is dead (404) — the general press-release
+   158→    # feed (verified 200) carries enforcement actions among its items.
+   159→    "CFTC":  "https://www.cftc.gov/RSS/RSSGP/rssgp.xml",
+   160→    "FCA":   "https://www.fca.org.uk/news/rss.xml",
+   161→    # ESMA blocks non-browser UAs (403); the fetch path retries with a
+   162→    # browser UA — kept because it is the only official ESMA feed.
+   163→    "ESMA":  "https://www.esma.europa.eu/press-news/esma-news/rss",
+   164→    "MAS":   "https://www.mas.gov.sg/news/rss",
+   165→}
+   166→
+   167→# ─────────────────────────────────────────────────────────────────────────────
+   168→# Module state
+   169→# ─────────────────────────────────────────────────────────────────────────────
+   170→
+   171→_db_path: str = ""
+   172→_db_lock  = threading.Lock()
+   173→_vader    = SentimentIntensityAnalyzer()
+   174→_scheduler: Optional[BackgroundScheduler] = None
+   175→_entity_history_ref: Optional[Dict] = None  # reference to faiss_service entity_history
+   176→_centroids_ref: Optional[np.ndarray] = None  # reference to faiss_service centroids
+   177→
+   178→# In-memory caches (refreshed from DB)
+   179→_cred_cache: Dict[str, float] = {}
+   180→_crawl_cache: Dict[str, Dict] = {}
+   181→_reflexivity_log: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
+   182→_mg_log: Dict[str, List[float]] = defaultdict(list)  # Manifestation Gap per entity
+   183→_signal_pub_log: List[Tuple[float, float, str]] = []  # (ts, anima_score, entity_id)
+   184→
+   185→# ─────────────────────────────────────────────────────────────────────────────
+   186→# Database — L3.4 CRED tables + L3.3 outcome tables
+   187→# ─────────────────────────────────────────────────────────────────────────────
+   188→
+   189→def _db_conn() -> sqlite3.Connection:
+   190→    conn = sqlite3.connect(_db_path, check_same_thread=False)
+   191→    conn.row_factory = sqlite3.Row
+   192→    return conn
+   193→
+   194→
+   195→def _init_anima_tables():
+   196→    """Create ANIMA-specific SQLite tables if they don't exist."""
+   197→    with _db_lock:
+   198→        conn = _db_conn()
+   199→        conn.executescript("""
+   200→            -- L3.4: Source credibility tracking
+   201→            CREATE TABLE IF NOT EXISTS anima_sources (
+   202→                source_id    TEXT PRIMARY KEY,
+   203→                category     TEXT,
+   204→                cred         REAL DEFAULT 0.80,
+   205→                last_decay   REAL,           -- unix ts of last daily decay
+   206→                total_events INTEGER DEFAULT 0,
+   207→                verified     INTEGER DEFAULT 0,
+   208→                falsified    INTEGER DEFAULT 0,
+   209→                flagged      INTEGER DEFAULT 0,
+   210→                excluded     INTEGER DEFAULT 0,
+   211→                updated_at   TEXT
+   212→            );
+   213→
+   214→            -- L3.4: Source credibility events (audit trail)
+   215→            CREATE TABLE IF NOT EXISTS anima_cred_events (
+   216→                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+   217→                source_id  TEXT,
+   218→                event_type TEXT,      -- VERIFIED | FALSIFIED | MANIPULATION | CONFLICT
+   219→                delta      REAL,
+   220→                cred_after REAL,
+   221→                entity_id  TEXT,
+   222→                note       TEXT,
+   223→                ts         REAL
+   224→            );
+   225→
+   226→            -- L3.3 HA: Outcome predictions + time-delayed verification
+   227→            CREATE TABLE IF NOT EXISTS anima_predictions (
+   228→                pred_id         TEXT PRIMARY KEY,
+   229→                entity_id       TEXT,
+   230→                source_id       TEXT,
+   231→                predicted_value REAL,
+   232→                prediction_ts   REAL,
+   233→                manifest_window REAL,   -- seconds until outcome expected
+   234→                realized_value  REAL,   -- filled in on verification
+   235→                error           REAL,   -- |realized - predicted|
+   236→                verified        INTEGER DEFAULT 0,
+   237→                verified_at     REAL
+   238→            );
+   239→
+   240→            -- L3.5: Per-entity crawl results (for CA cross-source agreement)
+   241→            CREATE TABLE IF NOT EXISTS anima_crawl_results (
+   242→                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+   243→                entity_id TEXT,
+   244→                source_id TEXT,
+   245→                score     REAL,       -- normalized [0,1] signal from this source
+   246→                raw_data  TEXT,       -- JSON blob of raw crawl result
+   247→                crawled_at REAL
+   248→            );
+   249→
+   250→            -- L3.5: Reflexivity log (signal publication → behavioral change)
+   251→            CREATE TABLE IF NOT EXISTS anima_reflexivity (
+   252→                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+   253→                entity_id    TEXT,
+   254→                pub_ts       REAL,
+   255→                anima_at_pub REAL,
+   256→                phi_before   REAL,    -- Φ(t) 2h before publication
+   257→                phi_after    REAL,    -- Φ(t) 2h after publication
+   258→                delta_phi    REAL,    -- behavioral change attributed to publication
+   259→                reflexivity  REAL,    -- |delta_phi| / max(phi_before, ε)
+   260→                recorded_at  REAL
+   261→            );
+   262→
+   263→            -- L3.5: Manifestation Gap per entity per signal type
+   264→            CREATE TABLE IF NOT EXISTS anima_manifestation_gap (
+   265→                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+   266→                entity_id     TEXT,
+   267→                signal_type   TEXT,
+   268→                predicted_at  REAL,
+   269→                observed_at   REAL,
+   270→                mg            REAL,   -- B_predicted - B_observed (timing gap in hours)
+   271→                recorded_at   REAL
+   272→            );
+   273→
+   274→            -- L3.7: Intelligence Maintenance Protocol status
+   275→            CREATE TABLE IF NOT EXISTS anima_im_status (
+   276→                source_id    TEXT PRIMARY KEY,
+   277→                baseline_ha  REAL DEFAULT 0.80,
+   278→                current_ha   REAL DEFAULT 0.80,
+   279→                im_ratio     REAL DEFAULT 1.00,
+   280→                last_checked REAL,
+   281→                maintenance_triggered INTEGER DEFAULT 0
+   282→            );
+   283→        """)
+   284→        conn.commit()
+   285→        conn.close()
+   286→
+   287→
+   288→def _bootstrap_sources():
+   289→    """Insert source registry rows if they don't exist yet."""
+   290→    with _db_lock:
+   291→        conn = _db_conn()
+   292→        now = datetime.now(timezone.utc)
+   293→        for sid, meta in SOURCES.items():
+   294→            conn.execute("""
+   295→                INSERT OR IGNORE INTO anima_sources
+   296→                    (source_id, category, cred, last_decay, updated_at)
+   297→                VALUES (?, ?, ?, ?, ?)
+   298→            """, (sid, meta["category"], meta["initial_cred"],
+   299→                  now.timestamp(), now.isoformat()))
+   300→        conn.commit()
+   301→        conn.close()
+   302→    _refresh_cred_cache()
+   303→
+   304→
+   305→# ─────────────────────────────────────────────────────────────────────────────
+   306→# L3.4 — Source Credibility Operations
+   307→# ─────────────────────────────────────────────────────────────────────────────
+   308→
+   309→def _refresh_cred_cache():
+   310→    """Load all CRED values from DB into memory cache."""
+   311→    with _db_lock:
+   312→        conn = _db_conn()
+   313→        rows = conn.execute("SELECT source_id, cred FROM anima_sources").fetchall()
+   314→        conn.close()
+   315→    for row in rows:
+   316→        _cred_cache[row["source_id"]] = row["cred"]
+   317→
+   318→
+   319→def get_cred(source_id: str) -> float:
+   320→    """Return current CRED for a source, applying any pending daily decay first."""
+   321→    _apply_cred_decay(source_id)
+   322→    return _cred_cache.get(source_id, 0.80)
+   323→
+   324→
+   325→def _apply_cred_decay(source_id: str):
+   326→    """
+   327→    L3.4: CRED(s,t) = CRED(s,t-1) × 0.99_per_day.
+   328→    Applies lazy compound decay since the last recorded decay timestamp.
+   329→    """
+   330→    now_ts = datetime.now(timezone.utc).timestamp()
+   331→    with _db_lock:
+   332→        conn = _db_conn()
+   333→        row = conn.execute(
+   334→            "SELECT cred, last_decay FROM anima_sources WHERE source_id = ?",
+   335→            (source_id,)
+   336→        ).fetchone()
+   337→        if not row:
+   338→            conn.close()
+   339→            return
+   340→        cred       = row["cred"]
+   341→        last_decay = row["last_decay"] or now_ts
+   342→        days_elapsed = (now_ts - last_decay) / 86400.0
+   343→        if days_elapsed >= 1.0:
+   344→            days_full = int(days_elapsed)
+   345→            new_cred  = max(0.05, cred * (CRED_DECAY_DAILY ** days_full))
+   346→            conn.execute("""
+   347→                UPDATE anima_sources
+   348→                SET cred = ?, last_decay = ?, updated_at = ?
+   349→                WHERE source_id = ?
+   350→            """, (new_cred, now_ts, datetime.now(timezone.utc).isoformat(), source_id))
+   351→            conn.commit()
+   352→            _cred_cache[source_id] = new_cred
+   353→        else:
+   354→            _cred_cache[source_id] = cred
+   355→        conn.close()
+   356→
+   357→
+   358→def update_cred(source_id: str, event_type: str, entity_id: str = "", note: str = ""):
+   359→    """
+   360→    L3.4: Apply a credibility event to a source.
+   361→    event_type: VERIFIED | FALSIFIED | MANIPULATION | CONFLICT
+   362→    """
+   363→    delta_map = {
+   364→        "VERIFIED":    CRED_DELTA_VERIFIED,
+   365→        "FALSIFIED":   CRED_DELTA_FALSIFIED,
+   366→        "MANIPULATION": CRED_DELTA_MANIPULATION,
+   367→        "CONFLICT":    CRED_DELTA_CONFLICT,
+   368→    }
+   369→    delta = delta_map.get(event_type, 0.0)
+   370→    if delta == 0.0:
+   371→        return
+   372→    _apply_cred_decay(source_id)
+   373→    now_ts = datetime.now(timezone.utc).timestamp()
+   374→    with _db_lock:
+   375→        conn = _db_conn()
+   376→        row = conn.execute(
+   377→            "SELECT cred, total_events, verified, falsified FROM anima_sources WHERE source_id = ?",
+   378→            (source_id,)
+   379→        ).fetchone()
+   380→        if not row:
+   381→            conn.close()
+   382→            return
+   383→        new_cred = max(0.05, min(1.0, row["cred"] + delta))
+   384→        flagged  = 1 if new_cred < CRED_FLAG_THRESHOLD else 0
+   385→        excluded = 1 if new_cred < CRED_EXCLUDE_THRESHOLD else 0
+   386→        conn.execute("""
+   387→            UPDATE anima_sources
+   388→            SET cred = ?, total_events = total_events + 1,
+   389→                verified  = verified  + ?,
+   390→                falsified = falsified + ?,
+   391→                flagged   = ?,
+   392→                excluded  = ?,
+   393→                updated_at = ?
+   394→            WHERE source_id = ?
+   395→        """, (new_cred,
+   396→              1 if event_type == "VERIFIED"  else 0,
+   397→              1 if event_type == "FALSIFIED" else 0,
+   398→              flagged, excluded,
+   399→              datetime.now(timezone.utc).isoformat(),
+   400→              source_id))
+   401→        conn.execute("""
+   402→            INSERT INTO anima_cred_events
+   403→                (source_id, event_type, delta, cred_after, entity_id, note, ts)
+   404→            VALUES (?, ?, ?, ?, ?, ?, ?)
+   405→        """, (source_id, event_type, delta, new_cred, entity_id, note, now_ts))
+   406→        conn.commit()
+   407→        conn.close()
+   408→    _cred_cache[source_id] = new_cred
+   409→    logger.info("[CRED] %s %s → %.3f (Δ%.1f)", source_id, event_type, new_cred, delta)
+   410→
+   411→
+   412→def get_all_cred_status() -> List[Dict]:
+   413→    """Return current CRED status for all sources."""
+   414→    for sid in SOURCES:
+   415→        _apply_cred_decay(sid)
+   416→    with _db_lock:
+   417→        conn = _db_conn()
+   418→        rows = conn.execute("""
+   419→            SELECT source_id, category, cred, total_events, verified,
+   420→                   falsified, flagged, excluded, updated_at
+   421→            FROM anima_sources ORDER BY cred DESC
+   422→        """).fetchall()
+   423→        conn.close()
+   424→    return [dict(r) for r in rows]
+   425→
+   426→
+   427→# ─────────────────────────────────────────────────────────────────────────────
+   428→# Enhanced Crawlers — L3.4 data sources
+   429→# ─────────────────────────────────────────────────────────────────────────────
+   430→
+   431→_EDGAR_UA = "TRION-Protocol research@trion.io"
+   432→
+   433→# NLP lexicons for EDGAR filing body text — whitepaper gap analysis spec
+   434→_EDGAR_HIGH_RISK = [
+   435→    "investigation", "material weakness", "going concern", "enforcement action",
+   436→    "subpoena", "fraud", "violation", "cease and desist", "sanctions",
+   437→    "money laundering", "unlicensed", "unregistered", "class action",
+   438→    "restated", "restatement", "impairment", "significant doubt",
+   439→    "inability to continue", "substantial doubt", "criminal",
+   440→]
+   441→_EDGAR_MED_RISK = [
+   442→    "regulatory scrutiny", "compliance issue", "risk factor", "litigation",
+   443→    "inquiry", "examination", "deficiency", "contingent liability",
+   444→    "under review", "pending investigation", "whistleblower", "material change",
+   445→]
+   446→_EDGAR_POSITIVE = [
+   447→    "clean audit", "no material weakness", "compliance", "approved",
+   448→    "registered", "licensed", "exemption granted", "no adverse findings",
+   449→    "unqualified opinion", "going concern resolved", "regulatory approval",
+   450→    "cleared", "closed investigation",
+   451→]
+   452→
+   453→
+   454→def _edgar_fetch_filing_text(hit_id: str, timeout: int = 5) -> str:
+   455→    """
+   456→    Fetch actual 8-K / 10-K body text from SEC EDGAR archives.
+   457→
+   458→    EDGAR hit `_id` format: "edgar/data/{cik}/{accession_nodash}.json"
+   459→    We reconstruct the filing index URL and fetch the primary document.
+   460→    Returns extracted plain text, empty string on failure.
+   461→    """
+   462→    try:
+   463→        parts = hit_id.strip("/").split("/")
+   464→        if len(parts) < 3:
+   465→            return ""
+   466→        cik             = parts[1]
+   467→        accession_nodash = parts[2].replace(".json", "")
+   468→
+   469→        # Format accession number with dashes: "000123456724123456" → "0001234567-24-123456"
+   470→        if len(accession_nodash) == 18:
+   471→            an = f"{accession_nodash[:10]}-{accession_nodash[10:12]}-{accession_nodash[12:]}"
+   472→        else:
+   473→            an = accession_nodash
+   474→
+   475→        index_url = (
+   476→            f"https://www.sec.gov/Archives/edgar/data/{cik}/"
+   477→            f"{accession_nodash}/{an}-index.json"
+   478→        )
+   479→        req = urllib.request.Request(index_url, headers={"User-Agent": _EDGAR_UA})
+   480→        with urllib.request.urlopen(req, timeout=timeout) as resp:
+   481→            index_data = json.loads(resp.read().decode())
+   482→
+   483→        # Find primary document (.htm / .txt)
+   484→        docs = index_data.get("documents", [])
+   485→        primary_url = ""
+   486→        for doc in docs:
+   487→            if doc.get("type") in ("", "10-K", "8-K", "10-Q") and doc.get("documentUrl"):
+   488→                primary_url = "https://www.sec.gov" + doc["documentUrl"]
+   489→                break
+   490→        if not primary_url and docs:
+   491→            first_doc = docs[0].get("documentUrl", "")
+   492→            if first_doc:
+   493→                primary_url = "https://www.sec.gov" + first_doc
+   494→
+   495→        if not primary_url:
+   496→            return ""
+   497→
+   498→        req2 = urllib.request.Request(primary_url, headers={"User-Agent": _EDGAR_UA})
+   499→        with urllib.request.urlopen(req2, timeout=timeout) as resp2:
+   500→            raw_html = resp2.read().decode("utf-8", errors="replace")
+   501→
+   502→        # Strip HTML tags to get plain text (fast, no dependencies)
+   503→        import re as _re
+   504→        text = _re.sub(r"<[^>]+>", " ", raw_html)
+   505→        text = _re.sub(r"&nbsp;|&amp;|&lt;|&gt;|&#\d+;", " ", text)
+   506→        text = _re.sub(r"\s+", " ", text)
+   507→        # Return first 8000 chars — enough for NLP, not too slow
+   508→        return text[:8000].lower()
+   509→
+   510→    except Exception as e:
+   511→        logger.debug("[ANIMA][EDGAR][FETCH] %s: %s", hit_id[:40], e)
+   512→        return ""
+   513→
+   514→
+   515→def _crawl_sec_edgar(entity_id: str) -> Dict:
+   516→    """
+   517→    SEC EDGAR — Real NLP on actual 8-K / 10-K filing body text.
+   518→
+   519→    Step 1: Full-text search hits via efts.sec.gov (JSON, structured API).
+   520→    Step 2: For top 3 hits, fetch actual filing document from SEC archives.
+   521→    Step 3: Run VADER financial sentiment + NLP keyword analysis on body text.
+   522→    Step 4: Extract all available _source metadata (form_type, file_date,
+   523→            display_names, accession_no, period_of_report).
+   524→
+   525→    Returns regulatory_score ∈ [0.30, 1.0]: 1 = clean, low = high risk language.
+   526→    """
+   527→    try:
+   528→        # Gap analysis: use entity ticker / address fragment, not raw hex
+   529→        query = entity_id.replace("0x", "").lower()[:20]
+   530→        url = (
+   531→            f"https://efts.sec.gov/LATEST/search-index?q=%22{query}%22"
+   532→            f"&dateRange=custom&startdt=2023-01-01&forms=4,8-K,10-K,13F,S-4,DEFM14A"
+   533→        )
+   534→        req = urllib.request.Request(url, headers={"User-Agent": _EDGAR_UA})
+   535→        with urllib.request.urlopen(req, timeout=8) as resp:
+   536→            data = json.loads(resp.read().decode())
+   537→
+   538→        hits  = data.get("hits", {}).get("hits", [])
+   539→        total = data.get("hits", {}).get("total", {}).get("value", 0)
+   540→
+   541→        risk_score  = 0.0
+   542→        pos_score   = 0.0
+   543→        vader_scores = []
+   544→        texts_analyzed = 0
+   545→        filings_fetched = 0
+   546→        form_types = []
+   547→        filing_dates = []
+   548→
+   549→        for i, hit in enumerate(hits[:5]):
+   550→            src = hit.get("_source", {})
+   551→
+   552→            # ── Metadata extraction (all available _source fields) ─────────────
+   553→            form_type  = src.get("form_type", src.get("period_of_report", ""))
+   554→            file_date  = src.get("file_date", "")
+   555→            accession  = src.get("accession_no", "")
+   556→            names      = " ".join(
+   557→                n.get("name", "") for n in src.get("display_names", [])
+   558→            )
+   559→            period     = src.get("period_of_report", "")
+   560→            file_num   = src.get("file_num", "")
+   561→            biz_loc    = src.get("biz_location", "")
+   562→
+   563→            if form_type:
+   564→                form_types.append(form_type)
+   565→            if file_date:
+   566→                filing_dates.append(file_date)
+   567→
+   568→            meta_text = " ".join([names, period, file_num, biz_loc]).lower()
+   569→
+   570→            # ── Also check highlight excerpts if EDGAR returns them ────────────
+   571→            highlight_text = ""
+   572→            highlight = hit.get("highlight", {})
+   573→            if highlight:
+   574→                for field_vals in highlight.values():
+   575→                    for excerpt in (field_vals if isinstance(field_vals, list) else []):
+   576→                        highlight_text += " " + excerpt
+   577→
+   578→            # ── For top 3 hits: fetch and NLP the actual filing body ───────────
+   579→            body_text = ""
+   580→            if i < 3:
+   581→                hit_id = hit.get("_id", "")
+   582→                if hit_id:
+   583→                    body_text = _edgar_fetch_filing_text(hit_id)
+   584→                    if body_text:
+   585→                        filings_fetched += 1
+   586→
+   587→            full_text = (meta_text + " " + highlight_text + " " + body_text).strip()
+   588→            if not full_text:
+   589→                continue
+   590→
+   591→            texts_analyzed += 1
+   592→
+   593→            # ── NLP keyword scoring ─────────────────────────────────────────────
+   594→            for kw in _EDGAR_HIGH_RISK:
+   595→                if kw in full_text:
+   596→                    risk_score += 0.10
+   597→            for kw in _EDGAR_MED_RISK:
+   598→                if kw in full_text:
+   599→                    risk_score += 0.04
+   600→            for kw in _EDGAR_POSITIVE:
+   601→                if kw in full_text:
+   602→                    pos_score += 0.04
+   603→
+   604→            # ── VADER financial sentiment on body text ─────────────────────────
+   605→            if body_text or highlight_text:
+   606→                nlp_text = (body_text or highlight_text)[:2000]
+   607→                vs = _vader.polarity_scores(nlp_text)
+   608→                vader_scores.append(vs["compound"])
+   609→
+   610→        # ── Aggregate score ────────────────────────────────────────────────────
+   611→        raw = max(0.0, min(1.0, 0.80 - min(risk_score, 0.60) + pos_score * 0.5))
+   612→        volume_penalty = min(0.10, total * 0.008)
+   613→        keyword_score  = max(0.30, raw - volume_penalty)
+   614→
+   615→        # Blend keyword score with VADER sentiment if available
+   616→        if vader_scores:
+   617→            mean_vader = float(np.mean(vader_scores))
+   618→            vader_normalized = (mean_vader + 1.0) / 2.0  # map [-1,1] → [0,1]
+   619→            # Weight: 60% keyword NLP, 40% VADER sentiment
+   620→            final_score = round(0.60 * keyword_score + 0.40 * vader_normalized, 4)
+   621→        else:
+   622→            final_score = round(keyword_score, 4)
+   623→
+   624→        return {
+   625→            "source":           "SEC_EDGAR",
+   626→            "score":            max(0.30, final_score),
+   627→            "filing_count":     total,
+   628→            "texts_analyzed":   texts_analyzed,
+   629→            "filings_fetched":  filings_fetched,
+   630→            "form_types":       list(set(form_types)),
+   631→            "recent_filing":    max(filing_dates) if filing_dates else "",
+   632→            "risk_score_raw":   round(risk_score, 3),
+   633→            "vader_compound":   round(float(np.mean(vader_scores)), 3) if vader_scores else None,
+   634→            "status":           "ok",
+   635→        }
+   636→
+   637→    except Exception as e:
+   638→        logger.debug("[ANIMA][SEC_EDGAR] %s", e)
+   639→        return {"source": "SEC_EDGAR", "score": 0.75, "filing_count": 0,
+   640→                "filings_fetched": 0, "status": "unavailable", "error": str(e)}
+   641→
+   642→
+   643→def _crawl_github(entity_id: str) -> Dict:
+   644→    """
+   645→    GitHub commit-level analysis.
+   646→    Scores: commit_velocity + contributor_diversity + issue_resolution + freshness.
+   647→    Returns developer_score ∈ [0,1].
+   648→    """
+   649→    headers = {"User-Agent": "TRION-Oracle/1.0"}
+   650→    if GITHUB_TOKEN:
+   651→        headers["Authorization"] = f"token {GITHUB_TOKEN}"
+   652→    ticker = entity_id[:10].lower().replace("0x", "")
+   653→    try:
+   654→        with httpx.Client(timeout=6.0) as client:
+   655→            search_url = f"https://api.github.com/search/repositories?q={ticker}+in:name,description+topic:defi&sort=stars&per_page=5"
+   656→            resp = client.get(search_url, headers=headers)
+   657→            repos = resp.json().get("items", [])
+   658→
+   659→        if not repos:
+   660→            return {"source": "GITHUB", "score": 0.45, "repos_found": 0, "status": "no_repos"}
+   661→
+   662→        top = repos[0]
+   663→        owner_repo = top.get("full_name", "")
+   664→
+   665→        commit_velocity = 0.0
+   666→        contributor_div = 0.0
+   667→        issue_res_rate  = 0.0
+   668→
+   669→        if owner_repo:
+   670→            with httpx.Client(timeout=6.0) as client:
+   671→                # Commit frequency — last 100 commits
+   672→                c_resp = client.get(
+   673→                    f"https://api.github.com/repos/{owner_repo}/commits?per_page=100",
+   674→                    headers=headers
+   675→                )
+   676→                commits = c_resp.json() if isinstance(c_resp.json(), list) else []
+   677→                if len(commits) >= 2:
+   678→                    # Days spanned by last 100 commits
+   679→                    try:
+   680→                        first_ts = commits[-1]["commit"]["committer"]["date"]
+   681→                        last_ts  = commits[0]["commit"]["committer"]["date"]
+   682→                        from datetime import datetime as dt
+   683→                        span_days = max(1, (dt.fromisoformat(last_ts.replace("Z","+00:00")) -
+   684→                                        dt.fromisoformat(first_ts.replace("Z","+00:00"))).days)
+   685→                        commits_per_week = (len(commits) / span_days) * 7
+   686→                        commit_velocity = min(1.0, commits_per_week / 20.0)
+   687→                    except Exception:
+   688→                        commit_velocity = 0.3
+   689→
+   690→                # Contributor diversity
+   691→                cont_resp = client.get(
+   692→                    f"https://api.github.com/repos/{owner_repo}/contributors?per_page=30",
+   693→                    headers=headers
+   694→                )
+   695→                contributors = cont_resp.json() if isinstance(cont_resp.json(), list) else []
+   696→                contributor_div = min(1.0, len(contributors) / 15.0)
+   697→
+   698→                # Issue resolution rate
+   699→                closed_resp = client.get(
+   700→                    f"https://api.github.com/repos/{owner_repo}/issues?state=closed&per_page=30",
+
+[showing lines 1-700 of 1862; use offset=701 with limit to continue reading]

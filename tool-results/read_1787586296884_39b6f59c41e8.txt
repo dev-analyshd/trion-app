@@ -1,0 +1,664 @@
+     1→# TRION Protocol — Complete Funding Guide 2025–2026
+     2→## 100+ Active Grants, Hackathons, Bounties & Fundraising Paths
+     3→
+     4→> Last researched: May 2026 | Status key: 🟢 Open | 🟡 Monitor | 🔴 Closed/Concluded | ⭐ Priority for TRION
+     5→
+     6→---
+     7→
+     8→## TABLE OF CONTENTS
+     9→1. [Ecosystem-Native Grants (37 chains TRION indexes)](#section-1)
+    10→2. [DeFi Protocol DAO Grants](#section-2)
+    11→3. [Cross-Chain & Infrastructure Grants](#section-3)
+    12→4. [Active Hackathons & BUIDLathons](#section-4)
+    13→5. [Security Bounties & Audit Contests](#section-5)
+    14→6. [Accelerators & Incubators](#section-6)
+    15→7. [Venture Capital — Who to Pitch](#section-7)
+    16→8. [Community & Public Goods Funding](#section-8)
+    17→9. [AI & Compute-Specific Grants](#section-9)
+    18→10. [Priority Action Plan](#section-10)
+    19→
+    20→---
+    21→
+    22→## SECTION 1 — ECOSYSTEM-NATIVE GRANTS (Chains TRION Already Indexes)
+    23→
+    24→These are your highest-priority grants because TRION is *already live* on each chain listed.
+    25→Apply with proof of active indexing as your strongest credential.
+    26→
+    27→---
+    28→
+    29→### 1. 0G Foundation — $88.88M Ecosystem Growth Program ⭐⭐⭐⭐⭐
+    30→| | |
+    31→|---|---|
+    32→| **Pool** | $88.88M total |
+    33→| **Apollo Accelerator** | Up to **$2M per team** + Google Cloud credits + Stanford mentors |
+    34→| **Guild on 0G** | $8.88M pool, early-stage testnet→mainnet |
+    35→| **Backers** | Hack VC, Delphi Ventures, Bankless Ventures, OKX Ventures |
+    36→| **Apply** | 0g.ai → Ecosystem Program |
+    37→| **Status** | 🟢 Open (Rolling) |
+    38→| **TRION angle** | Only behavioral oracle with all 4 0G modules live (Chain, Storage, DA, Compute). Every TRION signal is published via 0G infrastructure. |
+    39→
+    40→---
+    41→
+    42→### 2. Arbitrum Foundation Grant Program ⭐⭐⭐⭐⭐
+    43→| Track | Amount | Status |
+    44→|---|---|---|
+    45→| Foundation Grants | $20K–$150K in ARB | 🟢 Rolling |
+    46→| **Stylus Sprint (Rust!)** | 5M ARB pool | 🟢 Open on Questbook |
+    47→| Trailblazer 2.0 (AI+DeFi) | Up to $10K each | 🟢 Open |
+    48→| ArbiFuel Gas Grants | Up to $10K credits | 🟢 Open |
+    49→| Alchemy-Arbitrum Credits | Up to $500K credits | 🟢 Open |
+    50→| **Apply** | arbitrum.foundation/grants | |
+    51→| **TRION angle** | Rust-native indexers (Stylus Sprint fit), deployed on Arbitrum mainnet + Sepolia, behavioral pre-execution checks for Arbitrum DeFi. |
+    52→
+    53→---
+    54→
+    55→### 3. HashKey Chain Eco Grants ⭐⭐⭐⭐⭐
+    56→| | |
+    57→|---|---|
+    58→| **Focus** | Innovation, feasibility, team strength |
+    59→| **Who** | Early-stage projects integrating with HashKey Chain |
+    60→| **Apply** | hashkeychain.net/grant |
+    61→| **Status** | 🟢 Open |
+    62→| **TRION angle** | TRION relayer is already live publishing signals on HashKey mainnet (chain_id 177). One of the first behavioral oracle protocols on the chain. |
+    63→
+    64→---
+    65→
+    66→### 4. Solana Foundation Grants ⭐⭐⭐⭐
+    67→| Track | Detail |
+    68→|---|---|
+    69→| Standard Grants | Open-source public goods, dev tooling |
+    70→| Convertible Grants | Converts to investment only on milestone |
+    71→| Direct Investments | For commercial-stage projects |
+    72→| **Apply** | solana.org/grants-funding |
+    73→| **Status** | 🟢 Rolling |
+    74→| **TRION angle** | trion-svm Rust crate indexes 1,000–1,500 BH entries per Solana slot. Behavioral manipulation detection for Solana DeFi is a genuine public good. |
+    75→
+    76→---
+    77→
+    78→### 5. Superteam Solana Bounties & Grants ⭐⭐⭐⭐
+    79→| | |
+    80→|---|---|
+    81→| **GDP distributed** | $1.7M+ across Solana ecosystem |
+    82→| **Apply** | earn.superteam.fun |
+    83→| **Status** | 🟢 Always active (new bounties weekly) |
+    84→| **TRION angle** | Submit TRION's Solana behavioral fingerprinting as a bounty deliverable. Superteam also runs regional chapters for networking. |
+    85→
+    86→---
+    87→
+    88→### 6. NEAR Foundation Grants ⭐⭐⭐⭐
+    89→| Track | Detail |
+    90→|---|---|
+    91→| Direct Grants | near.org/funding |
+    92→| Strategic Funding | Equity track for commercial projects |
+    93→| Metrics-based Rewards | Tied to dev activity + user adoption |
+    94→| **Apply** | near.org/funding |
+    95→| **Status** | 🟢 Rolling |
+    96→| **TRION angle** | trion-near Rust crate is live at block 249M+. Behavioral entity fingerprinting across NEAR DeFi. |
+    97→
+    98→---
+    99→
+   100→### 7. Sui Foundation — $50M Grants Program ⭐⭐⭐⭐
+   101→| Track | Amount |
+   102→|---|---|
+   103→| Ecosystem Grants | $5K–$200K |
+   104→| **Apply** | sui.io/request-for-proposals |
+   105→| **Overflow 2026 Hackathon** | $500K+ prize pool 🟢 Registration Open |
+   106→| **Status** | 🟢 Open |
+   107→| **TRION angle** | trion-sui Rust crate is live (276M+ blocks indexed). Enter Overflow 2026 AI Agents track — TRION BH pipeline is an AI-ready behavioral data layer for Sui. |
+   108→
+   109→---
+   110→
+   111→### 8. Aptos Foundation Grants ⭐⭐⭐⭐
+   112→| Track | Amount |
+   113→|---|---|
+   114→| Ecosystem Grants | $5K–$50K |
+   115→| Payments Grant | Up to $150K |
+   116→| SecCreds (audit credits) | Up to $25K |
+   117→| Google Cloud Credits | Up to $100K/year × 2 years |
+   118→| **Apply** | aptosnetwork.com/grants |
+   119→| **Status** | 🟢 Rolling |
+   120→| **TRION angle** | trion-aptos Rust crate live at block 772M+. Movement ecosystem also covered (trion-movement). |
+   121→
+   122→---
+   123→
+   124→### 9. Movement Network Foundation Grants ⭐⭐⭐
+   125→| | |
+   126→|---|---|
+   127→| **Focus** | Move language, open-source, DeFi, NFTs |
+   128→| **Apply** | movementnetwork.xyz/grants |
+   129→| **Status** | 🟢 Rolling |
+   130→| **TRION angle** | trion-movement is the only behavioral oracle indexer for Movement Labs (chain_id 5002). Strong "first mover" narrative. |
+   131→
+   132→---
+   133→
+   134→### 10. Interchain Foundation (ICF) — Cosmos ⭐⭐⭐⭐
+   135→| | |
+   136→|---|---|
+   137→| **Amount** | CHF 50K–300K (~$55K–$330K USD) |
+   138→| **Requirements** | Build on Cosmos SDK / IBC / CosmWasm, open-source |
+   139→| **Apply** | apply.interchain.io |
+   140→| **Status** | 🟢 Rolling |
+   141→| **TRION angle** | TRION covers 6 Cosmos chains (Hub, Kava, Injective, SEI, dYdX, Initia). Cross-chain behavioral fingerprinting via IBC is directly relevant. |
+   142→
+   143→---
+   144→
+   145→### 11. TON Foundation — Champion Grants ⭐⭐⭐
+   146→| | |
+   147→|---|---|
+   148→| **Type** | Non-dilutive, milestone-based |
+   149→| **Verticals** | GameFi, DeFi, Consumer Apps, Infrastructure, Social |
+   150→| **Apply** | society.ton.org → TON Builders Portal |
+   151→| **Status** | 🟢 Active (launched May 2025) |
+   152→| **TRION angle** | trion-ton Rust crate live (67M+ blocks). TON is Telegram's chain — 900M users. Behavioral oracle for TON DeFi is a compelling pitch. |
+   153→
+   154→---
+   155→
+   156→### 12. TON Foundation — Previous Open Programs ⭐⭐⭐
+   157→| | |
+   158→|---|---|
+   159→| **Apply** | blog.ton.org/ton-grants |
+   160→| **Community** | TON Builders Telegram channel |
+   161→| **Status** | 🟢 Rolling |
+   162→
+   163→---
+   164→
+   165→### 13. StarkNet Foundation — Seed Grants ⭐⭐⭐
+   166→| | |
+   167→|---|---|
+   168→| **Amount** | Up to $25K in STRK |
+   169→| **Stage** | Early-stage (pre-market) |
+   170→| **Apply** | starknet.io/grants/seed-grants |
+   171→| **Status** | 🟢 Rolling |
+   172→
+   173→---
+   174→
+   175→### 14. StarkNet Foundation — Growth Grants ⭐⭐⭐
+   176→| | |
+   177→|---|---|
+   178→| **Amount** | Up to $1M in USD/STRK |
+   179→| **Stage** | Live product with traction |
+   180→| **Apply** | starknet.io/grants/growth-grants |
+   181→| **Status** | 🟢 Rolling |
+   182→| **TRION angle** | trion-starknet Rust crate live (9.9M+ blocks). Two-tier strategy: apply Seed now, Growth after more traction. |
+   183→
+   184→---
+   185→
+   186→### 15. StarkNet Catalyst Program ⭐⭐⭐
+   187→| | |
+   188→|---|---|
+   189→| **Pool** | 20M+ STRK |
+   190→| **Target** | Top-performing dApps |
+   191→| **Status** | 🟢 Active |
+   192→
+   193→---
+   194→
+   195→### 16. Injective Ecosystem Venture Fund ⭐⭐⭐
+   196→| | |
+   197→|---|---|
+   198→| **Fund Size** | $150 Million |
+   199→| **Process** | Submit → Interview → Matched with VCs |
+   200→| **Apply** | injective.com/venturegroup |
+   201→| **Status** | 🟢 Always open |
+   202→| **TRION angle** | trion-cosmos covers SEI and Injective. Cross-chain behavioral signals for Injective DEX traders. |
+   203→
+   204→---
+   205→
+   206→### 17. Injective Grant DAO (DoraHacks) ⭐⭐⭐
+   207→| | |
+   208→|---|---|
+   209→| **Apply** | dorahacks.io/injective |
+   210→| **Status** | 🟢 Rolling rounds |
+   211→
+   212→---
+   213→
+   214→### 18. Pi Network Developer Grants (Next Round) ⭐⭐
+   215→| | |
+   216→|---|---|
+   217→| **Previous** | 160,000 Pi total prizes (2025 Hackathon) |
+   218→| **Next round** | Monitor minepi.com/developers |
+   219→| **TRION angle** | trion-pi Rust crate live (62M+ blocks). One of the only external oracle protocols on Pi's mainnet. |
+   220→
+   221→---
+   222→
+   223→### 19. TRON DAO — Builders League (TBL) ⭐⭐⭐
+   224→| | |
+   225→|---|---|
+   226→| **Pool** | Up to $10M total |
+   227→| **Focus** | DeFi, Consumer dApps, AI integration |
+   228→| **Apply** | trondao.org |
+   229→| **Status** | 🟢 Active (Rolling) |
+   230→
+   231→---
+   232→
+   233→### 20. TRON Developer Grant Program ⭐⭐⭐
+   234→| | |
+   235→|---|---|
+   236→| **Pool** | $90,000/quarter |
+   237→| **Apply** | trondao.org |
+   238→| **Status** | 🟢 Quarterly |
+   239→
+   240→---
+   241→
+   242→### 21. TRON AI-Web3 Grant Program ⭐⭐⭐
+   243→| | |
+   244→|---|---|
+   245→| **Pool** | $15M total |
+   246→| **Focus** | AI + blockchain integrations |
+   247→| **Apply** | trondao.org |
+   248→| **Status** | 🟢 Active |
+   249→| **TRION angle** | trion-tron Rust crate live (82M+ blocks, 300–600 BH entries/block). AI behavioral oracle for TRON DeFi. |
+   250→
+   251→---
+   252→
+   253→### 22. dYdX Grants Program ⭐⭐⭐
+   254→| | |
+   255→|---|---|
+   256→| **Pool** | $8M in DYDX (community treasury) |
+   257→| **Approval** | 89.76% community vote |
+   258→| **Apply** | dydxgrants.com/grants-application |
+   259→| **Status** | 🟢 Open |
+   260→| **TRION angle** | dYdX is a Cosmos chain TRION already indexes. Behavioral manipulation detection for perp traders is directly relevant. |
+   261→
+   262→---
+   263→
+   264→### 23. Sei Foundation Grants ⭐⭐⭐
+   265→| | |
+   266→|---|---|
+   267→| **Focus** | High-impact DeFi applications, technical innovation |
+   268→| **Apply** | sei.io/grants-and-funding |
+   269→| **Status** | 🟢 Rolling |
+   270→| **TRION angle** | trion-cosmos covers SEI. Behavioral security for SEI's high-speed DeFi environment. |
+   271→
+   272→---
+   273→
+   274→### 24. Kava Rise — $750M Developer Incentive Program ⭐⭐
+   275→| | |
+   276→|---|---|
+   277→| **Type** | Developer incentives tied to TVL/usage metrics |
+   278→| **Apply** | kava.io/ecosystem |
+   279→| **Status** | 🟡 Ongoing (monitor for grant windows) |
+   280→
+   281→---
+   282→
+   283→### 25. Ethereum Foundation ESP ⭐⭐⭐
+   284→| | |
+   285→|---|---|
+   286→| **New Model** | Wishlist + RFPs (post-Nov 2025 relaunch) |
+   287→| **Small Grants** | Under $30K, faster track |
+   288→| **Project Grants** | Over $30K, multi-phase |
+   289→| **Apply** | esp.ethereum.foundation/applicants |
+   290→| **Status** | 🟢 Open (new model) |
+   291→| **TRION angle** | Apply under the security/cryptography Wishlist items. Canonical BH (93-byte dual-strand DNA hash) as a cryptographic primitive for DeFi security is relevant to EF's stated interests. |
+   292→
+   293→---
+   294→
+   295→### 26. Base Builder Grants (Coinbase) ⭐⭐⭐
+   296→| | |
+   297→|---|---|
+   298→| **Amount** | 1–5 ETH (retroactive) |
+   299→| **Apply** | docs.base.org/get-started/get-funded |
+   300→| **Status** | 🟢 Rolling |
+   301→
+   302→---
+   303→
+   304→### 27. Coinbase CDP Summer Builder Grants ⭐⭐⭐
+   305→| | |
+   306→|---|---|
+   307→| **Focus** | Coinbase Developer Platform builders |
+   308→| **Apply** | coinbase.com/developer-platform |
+   309→| **Status** | 🟡 Monitor for next cycle |
+   310→
+   311→---
+   312→
+   313→### 28. Optimism RetroPGF — Continuous Rewards ⭐⭐⭐
+   314→| | |
+   315→|---|---|
+   316→| **Model** | Retroactive — get paid for work already delivered |
+   317→| **Cadence** | Ongoing impact evaluation + regular rewards |
+   318→| **Apply** | optimism.io/rpgf |
+   319→| **Status** | 🟢 Active (continuous model) |
+   320→| **TRION angle** | Deployed on OP mainnet + Sepolia. Behavioral oracle as public infrastructure for OP's superchain. |
+   321→
+   322→---
+   323→
+   324→### 29. ZKSync Community Activation Pilot ⭐⭐⭐
+   325→| | |
+   326→|---|---|
+   327→| **Allocation** | 20M ZK tokens |
+   328→| **Duration** | 12 months (2025–2026) |
+   329→| **Apply** | forum.zknation.io |
+   330→| **Status** | 🟢 Active |
+   331→
+   332→---
+   333→
+   334→### 30. ZKSync Fellowship ⭐⭐
+   335→| | |
+   336→|---|---|
+   337→| **Apply** | zksync.mirror.xyz (Call for Proposals) |
+   338→| **Status** | 🟡 Monitor for next cohort |
+   339→
+   340→---
+   341→
+   342→### 31. Linea Ecosystem Fund ⭐⭐
+   343→| | |
+   344→|---|---|
+   345→| **Pool** | 75% of 72B LINEA tokens (~54B LINEA) |
+   346→| **Early Phase** | ~25% active in first 12–18 months |
+   347→| **Apply** | linea.build |
+   348→| **Status** | 🟢 Active |
+   349→| **TRION angle** | trion-evm Rust crate indexes Linea mainnet (chain_id 59144). |
+   350→
+   351→---
+   352→
+   353→### 32. Scroll Ecosystem Growth Council ⭐⭐
+   354→| | |
+   355→|---|---|
+   356→| **Pool** | 2,000,000 SCR (6-month trial) |
+   357→| **Apply** | grants.scroll.io |
+   358→| **Status** | 🟢 Active |
+   359→| **TRION angle** | trion-evm indexes Scroll mainnet (chain_id 534352). |
+   360→
+   361→---
+   362→
+   363→### 33. Mantle — Lightning Grants ⭐⭐⭐
+   364→| | |
+   365→|---|---|
+   366→| **Type** | Fast-track MNT grants, rolling weekly |
+   367→| **Apply** | mantle.xyz/grants |
+   368→| **Status** | 🟢 Open |
+   369→
+   370→---
+   371→
+   372→### 34. Mantle Public Grants ⭐⭐
+   373→| | |
+   374→|---|---|
+   375→| **Amount** | Up to $20,000 in MNT |
+   376→| **Apply** | mantle.xyz/grants |
+   377→| **Status** | 🟢 Open |
+   378→
+   379→---
+   380→
+   381→### 35. Mantle Scouts Program ⭐⭐
+   382→| | |
+   383→|---|---|
+   384→| **Pool** | $1M in MNT |
+   385→| **Focus** | Consumer, Payments, AI, Ecosystem |
+   386→| **Apply** | mantle.xyz/grants |
+   387→| **Status** | 🟢 Open |
+   388→| **TRION angle** | trion-evm indexes Mantle mainnet (chain_id 5000). |
+   389→
+   390→---
+   391→
+   392→### 36. Avalanche Blizzard Fund ⭐⭐
+   393→| | |
+   394→|---|---|
+   395→| **Size** | $200M+ |
+   396→| **Stage** | Seed & Series A |
+   397→| **Apply** | blizzard@avalabs.org |
+   398→| **Status** | 🟢 Rolling |
+   399→
+   400→---
+   401→
+   402→### 37. Avalanche Foundation Research Grants ⭐⭐
+   403→| | |
+   404→|---|---|
+   405→| **Amount** | Up to $50,000 |
+   406→| **Focus** | Network economics research |
+   407→| **Apply** | avax.network |
+   408→| **Status** | 🟡 Monitor |
+   409→
+   410→---
+   411→
+   412→### 38. Sonic / Fantom Labs — Innovator Fund ⭐⭐
+   413→| | |
+   414→|---|---|
+   415→| **Fund Size** | $120M+ (200M FTM tokens) |
+   416→| **Type** | Rolling strategic grants |
+   417→| **Focus** | Native apps, DApps, infrastructure |
+   418→| **Apply** | soniclabs.com |
+   419→| **Status** | 🟢 Rolling |
+   420→
+   421→---
+   422→
+   423→### 39. Polygon Community Grants (CGP Season 2) ⭐⭐
+   424→| | |
+   425→|---|---|
+   426→| **Apply** | polygon.questbook.xyz |
+   427→| **Status** | 🟡 Monitor for Season 2 open date |
+   428→| **TRION angle** | trion-evm indexes Polygon mainnet (chain_id 137). |
+   429→
+   430→---
+   431→
+   432→### 40. Filecoin Foundation Open Grants ⭐⭐
+   433→| | |
+   434→|---|---|
+   435→| **Max** | Up to $50,000 |
+   436→| **Type** | GitHub Issue applications |
+   437→| **Apply** | fil.org/grants |
+   438→| **Status** | 🟢 Rolling |
+   439→| **TRION angle** | TRION uses 0G storage which is derived from Filecoin's data availability model. DA behavioral analytics angle. |
+   440→
+   441→---
+   442→
+   443→## SECTION 2 — DEFI PROTOCOL DAO GRANTS
+   444→
+   445→These DeFi protocol DAOs fund infrastructure that benefits their ecosystems.
+   446→
+   447→| # | Program | Amount | Apply | Status | TRION Angle |
+   448→|---|---|---|---|---|---|
+   449→| 41 | **Uniswap Foundation** | $106M reserved for grants | uniswapfoundation.org/grants | 🟢 Open | Behavioral manipulation detection for Uniswap pools (wash trading, sandwich attacks) |
+   450→| 42 | **Chainlink Community Grants** | Varies | go.chain.link/archives/community/grants | 🟢 Rolling | Complementary behavioral layer to Chainlink price feeds |
+   451→| 43 | **Chainlink BUILD Program** | Token rewards + support | chain.link/build-program | 🟢 Open | Full technical + marketing + investor access program |
+   452→| 44 | **Aave Grants DAO (AGD)** | Varies | aavegrants.org | 🟢 Rolling | Behavioral health scoring for Aave borrowers/liquidators |
+   453→| 45 | **Compound Foundation** | $9M COMP treasury | compound.finance | 🟢 Active (18-month mandate) | Manipulation detection for Compound markets |
+   454→| 46 | **MakerDAO Grants** | 5K–50K DAI | grants.makerdao.com | 🟢 Rolling | DAI stability behavioral analytics, oracle health monitoring |
+   455→| 47 | **The Graph Grants** | Varies | thegraph.com/grants | 🟢 Open | TRION as a behavioral subgraph layer on top of The Graph |
+   456→| 48 | **1inch Foundation** | $3M in 1INCH pool | 1inch.com/foundation-grant-program | 🟢 Rolling | Behavioral routing optimization, front-running detection |
+   457→| 49 | **Lido LEGO** | Tiered (small to large) | lido.fi/lego | 🟢 Always open | LST behavioral health scoring, validator behavioral analytics |
+   458→| 50 | **Lido DAO 2026 Ecosystem** | $60M proposed | research.lido.fi | 🟢 Active | Large-scale ecosystem grant program |
+   459→| 51 | **dYdX Grants** | $8M DYDX pool | dydxgrants.com | 🟢 Open | Perp trader behavioral fingerprinting |
+   460→| 52 | **Synthetix grantsDAO** | Varies | synthetix.io | 🟡 Monitor | Derivatives behavioral analytics |
+   461→| 53 | **Yearn Coordinape** | Monthly community grants | coordinape.com | 🟢 Monthly | DeFi yield behavioral patterns |
+   462→
+   463→---
+   464→
+   465→## SECTION 3 — CROSS-CHAIN & INFRASTRUCTURE GRANTS
+   466→
+   467→| # | Program | Amount | Apply | Status | TRION Angle |
+   468→|---|---|---|---|---|---|
+   469→| 54 | **Wormhole Foundation** | Varies | wormhole.foundation | 🟢 Rolling | Cross-chain behavioral signal relay (TRION already relays cross-chain) |
+   470→| 55 | **LayerZero Foundation** | 5% of ZRO supply for ecosystem | layerzero.network/ecosystem | 🟢 Rolling | Omnichain behavioral oracle using LayerZero messaging |
+   471→| 56 | **Axelar Grant Program** | Up to $25K | axelar.network | 🟢 Open | Cross-chain behavioral fingerprinting via GMP |
+   472→| 57 | **Axelar $60M Startup Fund** | $60M VC-matched | axelar.network/blog/axelar-ecosystem-funding-program | 🟢 Open | For post-traction stage |
+   473→| 58 | **Celestia Foundation** | Varies | docs.celestia.org | 🟡 Monitor | Modular DA behavioral analytics (TRION uses 0G DA which is Celestia-derived) |
+   474→| 59 | **EigenLayer Open Innovation Grants** | Part of 40M EIGEN cap | blog.eigenfoundation.org | 🟢 Active | Behavioral AVS (Actively Validated Service) on EigenLayer — huge new vertical |
+   475→| 60 | **EigenLayer Strategic Grants** | 40M EIGEN total 2025 | blog.eigenfoundation.org | 🟢 Active | TRION as an AVS providing behavioral trust scores for restakers |
+   476→| 61 | **Polkadot W3F (Strategic)** | Targeted now | grants.web3.foundation | 🟡 Shifted to strategic — apply with specific PVM angle | trion-pvm Rust crate live |
+   477→| 62 | **Web3 Foundation Wave 29+** | Varies | grants.web3.foundation | 🟡 Monitor | Watch for new wave announcements |
+   478→| 63 | **Alchemy $20M Solana Fund** | Up to $25K in infra credits | alchemy.com | 🟢 Active (April 2026) | Infrastructure cost relief for Solana BH pipeline |
+   479→| 64 | **Alchemy $25M Web3 Grants** | Varies | alchemy.com/blog/25m-web3-developer-grant | 🟢 Active | General Web3 infrastructure grants |
+   480→
+   481→---
+   482→
+   483→## SECTION 4 — ACTIVE HACKATHONS & BUIDLATHONS
+   484→
+   485→All dates relative to May 2026.
+   486→
+   487→| # | Hackathon | Prize Pool | Date | Format | Apply | TRION Tracks |
+   488→|---|---|---|---|---|---|---|
+   489→| 65 | **ETHGlobal New York 2026** ⭐⭐⭐⭐⭐ | $500K–$800K | Jun 12–14, 2026 | In-person NYC | ethglobal.com | Oracle, Security, AI, DeFi |
+   490→| 66 | **ETHGlobal Lisbon 2026** ⭐⭐⭐⭐⭐ | $500K+ | Jul 24–26, 2026 | In-person | ethglobal.com | Full Web3 |
+   491→| 67 | **ETHGlobal Tokyo 2026** ⭐⭐⭐⭐⭐ | $500K+ | Sep 25–27, 2026 | In-person | ethglobal.com | Full Web3 |
+   492→| 68 | **ETHGlobal Mumbai 2026** ⭐⭐⭐⭐ | TBA | Q4 2026 | In-person | ethglobal.com | Full Web3 |
+   493→| 69 | **Sui Overflow 2026** ⭐⭐⭐⭐ | $500K+ | Ongoing 2026 | Online Global | overflow.sui.io | AI Agents, DeFi, Dev Tooling |
+   494→| 70 | **ETHDenver 2026** (concluded Feb) | Large | Feb 17–21, 2026 | Denver | ethdenver.com | — |
+   495→| 71 | **AI Trading Hackathon (WEEX)** ⭐⭐⭐⭐ | **$1.88M** | 2026 | Online | weex.com | AI + Trading signals |
+   496→| 72 | **HackaTRON Season 8** ⭐⭐⭐ | ~$650K (based on S7) | Coming soon | Online | trondao.org | DeFi, GameFi, Infra, AI |
+   497→| 73 | **DoraHacks BUIDL (Live Listings)** ⭐⭐⭐⭐ | Varies (30K+ teams funded) | Always active | Online | dorahacks.io/hackathon | DeFi, Oracle, AI, Security |
+   498→| 74 | **Devfolio Blockchain Hackathons** ⭐⭐⭐ | Varies | Various 2026 | Hybrid | devfolio.co/hackathons | DeFi, Infrastructure |
+   499→| 75 | **DeFy'26 (Devfolio)** ⭐⭐⭐ | TBA | 2026 | Online | defy-26.devfolio.co | DeFi |
+   500→| 76 | **HackQuest Hackathons** ⭐⭐⭐ | Varies (80+ hackathons hosted) | Continuous | Online | hackquest.io | AI + Oracles (explicit track) |
+   501→| 77 | **Gitcoin GG25** ⭐⭐⭐ | $100K–$300K matching | Q2–Q3 2026 (est.) | Online | gitcoin.co | DeFi Infra, Public Goods |
+   502→| 78 | **Sonic DeFAI Hackathon** ⭐⭐⭐ | $295K | Ongoing/Next round | Online | blog.soniclabs.com | DeFi + AI |
+   503→| 79 | **TOKEN2049 Origins Hackathon** ⭐⭐⭐ | TBA | Singapore 2026 | Hybrid | token2049.com | Full Web3 |
+   504→| 80 | **Injective Global Hackathon** ⭐⭐⭐ | Varies | Quarterly | Online | injective.com/hackathon |  DeFi, Finance |
+   505→| 81 | **Base Indonesia Hackathon** | TBA | 2026 | Hybrid | devfolio.co | Base ecosystem |
+   506→| 82 | **BNB Chain MVB Season 9** ⭐⭐⭐ | Investment + mentorship | Ongoing (watch bnbchain.org) | Online | bnbchain.org/en/programs/mvb | DeFi, AI, RWA |
+   507→| 83 | **ETHConf NYC 2026** (Summit) | N/A (networking) | Jun 8–10, 2026 | In-person NYC | ethglobal.com | — |
+   508→| 84 | **Filecoin PL Events Hackathons** ⭐⭐ | Varies | Various | Online | hackathons.filecoin.io | Storage + DA |
+   509→| 85 | **Algorand Hackathons 2026** ⭐⭐ | Varies | 2026 | Online | algorand.co | DeFi |
+   510→| 86 | **Pi Hackathon (Next Edition)** ⭐⭐ | 160K+ Pi prizes (prev) | TBA 2026 | Online | minepi.com/developers | Pi ecosystem |
+   511→
+   512→---
+   513→
+   514→## SECTION 5 — SECURITY BOUNTIES & AUDIT CONTESTS
+   515→
+   516→These pay you for finding bugs OR for submitting TRION itself to be audited (audit credits reduce your costs).
+   517→
+   518→| # | Platform | What to Do | Payout | Apply | Status |
+   519→|---|---|---|---|---|---|
+   520→| 87 | **Immunefi Bug Bounties** | Hunt bugs in oracle/DeFi protocols as revenue stream; submit TRION for its own bounty program | $16M max bounties on platform | immunefi.com | 🟢 650+ active programs |
+   521→| 88 | **Aptos SecCreds** | Get up to $25K audit credits for TRION smart contracts | Up to $25K credits | aptosnetwork.com/grants | 🟢 Open |
+   522→| 89 | **Code4rena Audit Contests** | Submit TRION for a competitive audit; wardens find bugs, you pay only for findings | Varies | code4rena.com/audits | 🟢 Always active |
+   523→| 90 | **Sherlock Audit Contests** | Submit TRION for competitive audit + coverage insurance | Varies | audits.sherlock.xyz | 🟢 Always active |
+   524→| 91 | **TRON Bug Bounty** | Report bugs in TRON ecosystem; earn bounties | Varies by severity | trondao.org | 🟢 Active |
+   525→| 92 | **Immunefi Whitehat Grants** | Immunefi sometimes grants whitehat researchers building new security tooling | Varies | immunefi.com | 🟡 Monitor |
+   526→
+   527→---
+   528→
+   529→## SECTION 6 — ACCELERATORS & INCUBATORS
+   530→
+   531→| # | Program | What You Get | Apply | Status | Fit |
+   532→|---|---|---|---|---|---|
+   533→| 93 | **0G Apollo Accelerator** ⭐⭐⭐⭐⭐ | $2M + Google Cloud + Stanford mentors + investor intros | 0g.ai | 🟢 Open | Highest fit — already integrated |
+   534→| 94 | **Binance Labs / Yzi Labs Season 8** ⭐⭐⭐⭐ | Investment + Binance ecosystem access | binance.com/labs | 🟡 Watch for Season 8 opening | Chain-agnostic, all verticals |
+   535→| 95 | **BNB MVB Accelerator** ⭐⭐⭐ | 4-week program, YZi Labs + CMC Labs mentors | bnbchain.org/en/programs/mvb | 🟢 Season 9 active | DeFi, AI, RWA focus |
+   536→| 96 | **Coinbase Ventures** ⭐⭐⭐ | Investment (no formal accelerator) | Cold outreach + warm intro via 0G connections | 🟢 Always active | Infrastructure, security |
+   537→| 97 | **OKX Ventures** ⭐⭐⭐⭐ | Investment, already co-invested with 0G | Through 0G connection | 🟢 Active | Direct ecosystem overlap |
+   538→| 98 | **Hack VC** ⭐⭐⭐⭐ | Seed/Series A, 0G backer | hackvc.io | 🟢 Active | AI + DeFi infrastructure |
+   539→
+   540→---
+   541→
+   542→## SECTION 7 — VENTURE CAPITAL — WHO TO PITCH
+   543→
+   544→Based on stated 2025–2026 investment theses:
+   545→
+   546→| # | VC | Check Size | Thesis Fit | Contact Path |
+   547→|---|---|---|---|---|
+   548→| 99 | **Multicoin Capital** | $1M–$50M | ⭐⭐⭐⭐⭐ — Explicitly cited reliable oracles as critical DeFi infrastructure gap | multicoin.capital |
+   549→| 100 | **Paradigm** | $5M–$100M | ⭐⭐⭐⭐ — Deep research-driven, novel primitives, security | paradigm.xyz |
+   550→| 101 | **a16z Crypto** ($7.2B fund) | $5M–$50M | ⭐⭐⭐⭐ — Infrastructure, compliance rails, DeFi security | a16z.com/crypto |
+   551→| 102 | **OKX Ventures** | $500K–$10M | ⭐⭐⭐⭐⭐ — Already in 0G circle, oracle/DeFi infra | okx.com/ventures |
+   552→| 103 | **Hack VC** | $500K–$5M | ⭐⭐⭐⭐ — 0G backer, AI + DeFi infra | hackvc.io |
+   553→| 104 | **Delphi Ventures** | $1M–$20M | ⭐⭐⭐⭐ — Research-driven, 0G backer | delphidigital.io/ventures |
+   554→| 105 | **Bankless Ventures** | $250K–$2M | ⭐⭐⭐ — Community-aligned DeFi, 0G backer | banklesshq.com/ventures |
+   555→| 106 | **Polychain Capital** | $5M–$50M | ⭐⭐⭐⭐ — Backed Celestia ($204M), infrastructure focus | polychain.capital |
+   556→| 107 | **Bain Capital Crypto** | $5M–$50M | ⭐⭐⭐ — Infrastructure, institutional DeFi | baincapitalcrypto.com |
+   557→| 108 | **Blizzard Fund (Avalanche)** | Seed–Series A | ⭐⭐⭐ — DeFi, Finance, Enterprise | blizzard@avalabs.org |
+   558→
+   559→---
+   560→
+   561→## SECTION 8 — COMMUNITY & PUBLIC GOODS FUNDING
+   562→
+   563→| # | Program | Amount | Apply | Notes |
+   564→|---|---|---|---|---|
+   565→| 109 | **Gitcoin GG25 QF Rounds** | $100K–$300K matching | gitcoin.co | Q2 2026 est. — community voting multiplies funds |
+   566→| 110 | **Gitcoin Allo Protocol** | Custom rounds | allo.gitcoin.co | Run your own QF round for TRION public goods |
+   567→| 111 | **Octant DeFi Hackathon / Grants** | Yield-powered matching | octant.devfolio.co | Octant uses Golem's staked ETH yield for grants |
+   568→| 112 | **Giveth** | Community donations | giveth.io | List TRION as public goods infrastructure |
+   569→| 113 | **CLR.fund** | QF rounds | clr.fund | Ethereum public goods QF |
+   570→
+   571→---
+   572→
+   573→## SECTION 9 — AI & COMPUTE-SPECIFIC GRANTS
+   574→
+   575→| # | Program | Amount | Apply | Notes |
+   576→|---|---|---|---|---|
+   577→| 114 | **0G Compute Network** | Integration grants | 0g.ai | TRION uses 0G Compute — qualify for compute-native builder program |
+   578→| 115 | **NEAR AI Infrastructure** | Varies | near.org/funding | NEAR is pivoting to AI-first blockchain — TRION BH as AI data layer |
+   579→| 116 | **EigenLayer AVS Grants** | 40M EIGEN (2025) | blog.eigenfoundation.org | Build TRION as an AVS providing behavioral trust for restakers |
+   580→| 117 | **Alchemy Solana Fund** | Up to $25K credits | alchemy.com | Infrastructure cost reduction for AI/oracle workloads |
+   581→| 118 | **Google Cloud Web3** | Credits | cloud.google.com/web3 | Many grant programs include GCP credits (0G Apollo includes these) |
+   582→
+   583→---
+   584→
+   585→## SECTION 10 — PRIORITY ACTION PLAN
+   586→
+   587→### WEEK 1 — Apply Now (Highest ROI, Lowest Competition)
+   588→
+   589→| Priority | Action | Why |
+   590→|---|---|---|
+   591→| 🥇 #1 | **Apply to 0G Apollo Accelerator** | Up to $2M, you're already 100% integrated. Strongest possible application. Mention all 4 modules live, BH records on 0G storage. |
+   592→| 🥇 #2 | **Apply to HashKey Eco Grants** | Easiest win — you're one of the first behavioral oracles on HashKey mainnet. Short application, fast review. |
+   593→| 🥇 #3 | **Apply to Arbitrum Stylus Sprint** | Entire indexer stack is Rust. Arbitrum Sepolia live. Perfect fit. Apply on Questbook. |
+   594→| 🥈 #4 | **Apply to TRON AI-Web3 Grant ($15M pool)** | trion-tron is live and one of the highest-volume indexers (600+ BH/block). Strong metrics. |
+   595→| 🥈 #5 | **Apply to Sui Foundation** | $50M grants program, trion-sui live, pre-register for Overflow 2026 hackathon simultaneously. |
+   596→
+   597→### WEEK 2 — Ecosystem Grants
+   598→
+   599→| Priority | Action |
+   600→|---|---|
+   601→| #6 | **Solana Foundation Grants** — trion-svm 1,500 BH/slot is compelling proof of impact |
+   602→| #7 | **NEAR Foundation Grants** — trion-near live at 249M+ blocks |
+   603→| #8 | **StarkNet Seed Grant ($25K)** — quick win, low barrier, trion-starknet live |
+   604→| #9 | **Aptos Foundation Grants** — trion-aptos live + trion-movement (unique to TRION) |
+   605→| #10 | **dYdX Grants** — behavioral manipulation detection for perps is a clear value prop |
+   606→
+   607→### WEEK 3 — DeFi DAO Grants
+   608→
+   609→| Priority | Action |
+   610→|---|---|
+   611→| #11 | **Chainlink BUILD Program** — strategic partnership > funding; unlocks investor network |
+   612→| #12 | **Uniswap Foundation** — behavioral wash trading detection for Uniswap pools |
+   613→| #13 | **Aave Grants DAO** — behavioral health scoring for borrowers |
+   614→| #14 | **Lido LEGO** — LST validator behavioral analytics |
+   615→| #15 | **The Graph Grants** — TRION as a behavioral subgraph layer |
+   616→
+   617→### MONTH 2 — Hackathons & Accelerators
+   618→
+   619→| Priority | Action |
+   620→|---|---|
+   621→| #16 | **Register ETHGlobal New York (Jun 12–14)** — build demo around manipulation detection + BH dual-strand proof |
+   622→| #17 | **DoraHacks BUIDL** — submit to active oracle/AI bounties on the platform |
+   623→| #18 | **HackaTRON Season 8** — watch for registration opening |
+   624→| #19 | **Binance Labs Season 8** — watch for opening; prepare deck now |
+   625→| #20 | **EigenLayer AVS Grants** — design TRION as an AVS; huge new market |
+   626→
+   627→### ONGOING — VC Outreach
+   628→
+   629→| Priority | Action |
+   630→|---|---|
+   631→| #21 | **Warm intro via 0G → OKX Ventures, Hack VC, Delphi** — they all co-invested in 0G |
+   632→| #22 | **Multicoin Capital** — cite their oracle thesis directly in outreach |
+   633→| #23 | **Paradigm** — send the whitepaper; they love formal cryptographic primitives |
+   634→| #24 | **Gitcoin GG25** — list TRION when Q2 round opens for community multiplier |
+   635→
+   636→---
+   637→
+   638→## APPLICATION TEMPLATE — KEY MESSAGES FOR EVERY APPLICATION
+   639→
+   640→Use these facts across every application to make TRION's case:
+   641→
+   642→**What TRION is:**
+   643→> "TRION is the world's first multi-chain behavioral truth oracle — cryptographically fingerprinting on-chain entity behavior across 37 blockchains simultaneously. We detect manipulation, Sybil attacks, MEV capture, and governance capture before execution, not after."
+   644→
+   645→**Proof of work (live metrics to include):**
+   646→- 37 chains indexed (35 mainnet + 2 testnet), 13 VM families
+   647→- 900,000+ canonical Behavioral Hashes stored in FAISS ledger
+   648→- 131 API routes across 65 whitepaper formulas (L0–L10)
+   649→- All 13 Rust L0 crates built, zero compilation errors
+   650→- Per-transaction BH pipeline live on all 37 chains
+   651→- 0G integration: Storage, DA, Chain, Compute — all 4 modules
+   652→- Relayer active on: Arbitrum, Ethereum, Base, Optimism, HashKey, 0G Galileo
+   653→
+   654→**Technical differentiators:**
+   655→- 93-byte canonical Behavioral Hash (dual-strand DNA: sense + antisense XOR complement)
+   656→- 8-component Living Security System (GK Evolution, Immune System, CRISPR Defense, etc.)
+   657→- Kolmogorov complexity bound proving P(break LSS) is monotonically decreasing
+   658→- 0.023ms avg BH computation — 434× faster than spec requirement
+   659→- 7 languages: Rust, Python, TypeScript, Haskell, C++, Go, Julia
+   660→
+   661→---
+   662→
+   663→*Guide compiled May 2026. Check each program's website for the latest deadlines as grant cycles update frequently.*
+   664→

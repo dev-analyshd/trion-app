@@ -1,0 +1,754 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→TRION BTCP + CONTINUUM — API Blueprint
+     4→=======================================
+     5→
+     6→Adds API endpoints for all Phase 0-4 modules:
+     7→
+     8→  /api/v1/btcp/hash_dna           — Hash_DNA computation (POST)
+     9→  /api/v1/btcp/coherence_7plane   — 7-plane coherence score
+    10→  /api/v1/btcp/mf_score           — 7-type MF fingerprint score
+    11→  /api/v1/btcp/route              — BTCP route selection
+    12→  /api/v1/btcp/escrow/<id>        — Escrow state
+    13→  /api/v1/btcp/bibl/snapshot      — BIBL Tier-1 snapshot
+    14→  /api/v1/btcp/proof              — BTCP proof builder
+    15→  /api/v1/btcp/bitp/match         — BITP complement matching
+    16→  /api/v1/btcp/netting            — Netting pair finder
+    17→  /api/v1/btcp/aggregate          — Intent aggregation
+    18→  /api/v1/btcp/failure_classify   — Failure classifier
+    19→  /api/v1/btcp/version            — Version handler
+    20→  /api/v1/btcp/validator_fee      — Validator fee calculator
+    21→  /api/v1/btcp/sybil              — Sybil resistance check
+    22→  /api/v1/btcp/private_bibl       — Private BIBL protocol
+    23→  /api/v1/btcp/integration_status — anima-service integration status
+    24→  /api/v1/continuum/bid           — BID detection
+    25→  /api/v1/continuum/cme           — CME complement matching
+    26→  /api/v1/continuum/pmo           — PMO creation
+    27→  /api/v1/continuum/bdc           — BDC credit limit
+    28→  /api/v1/continuum/settlement    — Thermodynamic settlement trigger
+    29→  /api/v1/continuum/ccp           — CCP distribution
+    30→  /api/v1/continuum/engines       — All engine status overview
+    31→"""
+    32→
+    33→from flask import Blueprint, jsonify, request
+    34→import time
+    35→import hashlib
+    36→
+    37→btcp_bp = Blueprint("btcp_continuum", __name__)
+    38→
+    39→
+    40→# ── Phase 0: Hash_DNA ──────────────────────────────────────────────────────────
+    41→
+    42→@btcp_bp.route("/api/v1/btcp/hash_dna", methods=["POST"])
+    43→def btcp_hash_dna():
+    44→    """Compute Hash_DNA per the formal specification (Gap 7)."""
+    45→    from core.primitives.hash_dna import hash_dna, build_event, hash_dna_hex
+    46→    data = request.get_json(force=True, silent=True) or {}
+    47→    try:
+    48→        event = build_event(
+    49→            entity_id=data.get("entity_id_hex", "01" * 32),
+    50→            event_type_id=int(data.get("event_type_id", 1)),
+    51→            raw_amount=int(data.get("raw_amount", 10**18)),
+    52→            asset_decimals=int(data.get("asset_decimals", 18)),
+    53→            asset_chain_id=int(data.get("asset_chain_id", 1)),
+    54→            asset_address=data.get("asset_address", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+    55→            asset_symbol=data.get("asset_symbol", "USDC"),
+    56→            timestamp=int(data.get("timestamp", int(time.time()))),
+    57→            block_number=int(data.get("block_number", 18000000)),
+    58→            block_hash=data.get("block_hash_hex", "cc" * 32),
+    59→            chain_id=int(data.get("chain_id", 1)),
+    60→            contract_address=data.get("contract_address", "0x1d129D34279d1246aB08a41dfE610EaF8D794237"),
+    61→            counterparty_id=data.get("counterparty_id_hex"),
+    62→            protocol_id=data.get("protocol_id_hex"),
+    63→            context_hash=bytes.fromhex(data["context_hash_hex"]) if data.get("context_hash_hex") else None,
+    64→            btcp_version=int(data.get("btcp_version", 1)),
+    65→            nonce=int(data.get("nonce", 0)),
+    66→        )
+    67→        h = hash_dna(event)
+    68→        return jsonify({
+    69→            "hash_dna": hash_dna_hex(event),
+    70→            "domain_separator": event.domain_separator.hex(),
+    71→            "currency_id": event.magnitude_currency_id.hex(),
+    72→            "magnitude_normalized": event.magnitude_normalized,
+    73→            "payload_fields": 14,
+    74→            "whitepaper": "Gap 7 Resolution",
+    75→            "timestamp": int(time.time()),
+    76→        })
+    77→    except Exception as e:
+    78→        return jsonify({"error": str(e)}), 400
+    79→
+    80→
+    81→# ── Phase 0: 7-Plane Coherence ─────────────────────────────────────────────────
+    82→
+    83→@btcp_bp.route("/api/v1/btcp/coherence_7plane", methods=["POST"])
+    84→def btcp_coherence_7plane():
+    85→    """Compute 7-plane coherence score (Gap 2 Resolution)."""
+    86→    from core.planes.seven_plane_coherence import (
+    87→        PlaneInput, compute_7plane_coherence, PLANE_WEIGHTS, PlaneType,
+    88→    )
+    89→    data = request.get_json(force=True, silent=True) or {}
+    90→    try:
+    91→        inp = PlaneInput(
+    92→            magnitude=float(data.get("magnitude", 100.0)),
+    93→            historical_magnitudes=data.get("historical_magnitudes", [100.0] * 5),
+    94→            event_timestamp=int(data.get("event_timestamp", int(time.time()))),
+    95→            brt_phase=data.get("brt_phase", "normal"),
+    96→            historical_event_times=data.get("historical_event_times",
+    97→                                            [int(time.time()) - i * 86400 for i in range(1, 20)]),
+    98→            protocol_id=data.get("protocol_id", "uniswap"),
+    99→            historical_protocols=data.get("historical_protocols", ["uniswap"] * 15),
+   100→            counterparty_id=data.get("counterparty_id", ""),
+   101→            behavioral_graph=data.get("behavioral_graph", {}),
+   102→            recent_tx_count=int(data.get("recent_tx_count", 10)),
+   103→            historical_avg_per_N=float(data.get("historical_avg_per_N", 10.0)),
+   104→            behavioral_vectors={int(k): v for k, v in data.get("behavioral_vectors", {1: [0.8, 0.7, 0.9]}).items()},
+   105→            recent_kc=float(data.get("recent_kc", 0.50)),
+   106→            historical_kc=float(data.get("historical_kc", 0.49)),
+   107→        )
+   108→        score, results = compute_7plane_coherence(inp)
+   109→        return jsonify({
+   110→            "coherence_score": round(score, 6),
+   111→            "planes": [
+   112→                {
+   113→                    "name": r.plane.name,
+   114→                    "score": round(r.score, 4),
+   115→                    "passed": r.passed,
+   116→                    "needs_conscious_review": r.needs_conscious_review,
+   117→                    "details": r.details,
+   118→                }
+   119→                for r in results
+   120→            ],
+   121→            "weights": {p.name: w for p, w in PLANE_WEIGHTS.items()},
+   122→            "whitepaper": "Gap 2 Resolution — 7 Planes of Behavioral Truth",
+   123→        })
+   124→    except Exception as e:
+   125→        return jsonify({"error": str(e)}), 400
+   126→
+   127→
+   128→# ── Phase 0: 7 MF Fingerprint ──────────────────────────────────────────────────
+   129→
+   130→@btcp_bp.route("/api/v1/btcp/mf_score", methods=["POST"])
+   131→def btcp_mf_score():
+   132→    """Compute 7-type MF fingerprint score (BTCP_15 Gap 3)."""
+   133→    from core.manipulation.btcp_mf_detector import MFInput, compute_mf_score, MF_WEIGHTS, MFType
+   134→    data = request.get_json(force=True, silent=True) or {}
+   135→    try:
+   136→        inp = MFInput(
+   137→            intent_a_side=data.get("intent_a_side"),
+   138→            intent_b_side=data.get("intent_b_side"),
+   139→            victim_tx_between=data.get("victim_tx_between", False),
+   140→            magnitude_similarity=float(data.get("magnitude_similarity", 0.0)),
+   141→            self_trade_ratio=float(data.get("self_trade_ratio", 0.0)),
+   142→            counterparty_diversity=float(data.get("counterparty_diversity", 1.0)),
+   143→            trade_frequency=float(data.get("trade_frequency", 0.0)),
+   144→            large_swap_deviation=float(data.get("large_swap_deviation", 0.0)),
+   145→            oracle_update_deviation=float(data.get("oracle_update_deviation", 0.0)),
+   146→            borrow_liquidate_within_10_blocks=data.get("borrow_liquidate_within_10_blocks", False),
+   147→            order_submission_rate=float(data.get("order_submission_rate", 0.0)),
+   148→            order_cancellation_rate=float(data.get("order_cancellation_rate", 0.0)),
+   149→            behavioral_similarity_to_high_D=float(data.get("behavioral_similarity_to_high_D", 0.0)),
+   150→            own_D=float(data.get("own_D", 0.0)),
+   151→            high_D_threshold=float(data.get("high_D_threshold", 1000.0)),
+   152→            correlated_timing_score=float(data.get("correlated_timing_score", 0.0)),
+   153→            protocol_overlap_count=int(data.get("protocol_overlap_count", 0)),
+   154→            kc_complexity_delta=float(data.get("kc_complexity_delta", 0.0)),
+   155→            historical_kc=float(data.get("historical_kc", 0.0)),
+   156→        )
+   157→        score, results, review = compute_mf_score(inp)
+   158→        return jsonify({
+   159→            "mf_score": round(score, 6),
+   160→            "needs_conscious_review": review,
+   161→            "fingerprints": [
+   162→                {
+   163→                    "type": f"T{r.mf_type}",
+   164→                    "name": r.mf_type.name,
+   165→                    "detected": r.detected,
+   166→                    "score": round(r.score, 4),
+   167→                    "evidence": r.evidence,
+   168→                }
+   169→                for r in results
+   170→            ],
+   171→            "weights": {f"T{t}": w for t, w in MF_WEIGHTS.items()},
+   172→            "whitepaper": "BTCP_15 Gap 3 Resolution",
+   173→        })
+   174→    except Exception as e:
+   175→        return jsonify({"error": str(e)}), 400
+   176→
+   177→
+   178→# ── Phase 2: BTCP Router ───────────────────────────────────────────────────────
+   179→
+   180→@btcp_bp.route("/api/v1/btcp/route", methods=["POST"])
+   181→def btcp_route():
+   182→    """Compute BTCP route selection (K1 Resolution)."""
+   183→    from core.btcp.router import BIBLState, select_optimal_route, btcp_score_final
+   184→    data = request.get_json(force=True, silent=True) or {}
+   185→    try:
+   186→        state = BIBLState(
+   187→            nl_scores={int(k): v for k, v in data.get("nl_scores", {1: 0.85}).items()},
+   188→            gas_forecasts={int(k): v for k, v in data.get("gas_forecasts", {1: 31.0}).items()},
+   189→            gas_reference=float(data.get("gas_reference", 31.0)),
+   190→            cc_coherence={int(k): v for k, v in data.get("cc_coherence", {1: 0.9}).items()},
+   191→            mf_scores={int(k): v for k, v in data.get("mf_scores", {1: 0.02}).items()},
+   192→            finality_dist={int(k): v for k, v in data.get("finality_dist", {1: 12.0}).items()},
+   193→        )
+   194→        route = select_optimal_route(
+   195→            intent_value=float(data.get("intent_value", 1000.0)),
+   196→            entity_id=bytes.fromhex(data.get("entity_id_hex", "01" * 32)),
+   197→            state=state,
+   198→            candidate_chains=data.get("candidate_chains", [1, 137, 8453]),
+   199→            validator_counts={int(k): v for k, v in data.get("validator_counts", {1: 50}).items()},
+   200→        )
+   201→        if route is None:
+   202→            return jsonify({
+   203→                "route": None,
+   204→                "btcp_score": 0.0,
+   205→                "reason": "no_valid_route",
+   206→                "whitepaper": "K1 Resolution",
+   207→            })
+   208→        return jsonify({
+   209→            "route": {
+   210→                "route_id": route.route_id,
+   211→                "route_type": route.route_type.name,
+   212→                "anchor_chain": route.anchor_chain,
+   213→                "execution_chain": route.execution_chain,
+   214→                "gas_total": route.gas_total,
+   215→                "finality_confidence": route.finality_confidence,
+   216→                "beo_continuity": route.beo_continuity,
+   217→                "cc_coherence": route.cc_coherence,
+   218→            },
+   219→            "btcp_score": round(btcp_score_final(route, state), 6),
+   220→            "whitepaper": "K1 Resolution",
+   221→        })
+   222→    except Exception as e:
+   223→        return jsonify({"error": str(e)}), 400
+   224→
+   225→
+   226→# ── Phase 2: BIBL Snapshot ─────────────────────────────────────────────────────
+   227→
+   228→@btcp_bp.route("/api/v1/btcp/bibl/snapshot")
+   229→def btcp_bibl_snapshot():
+   230→    """BIBL Tier-1 snapshot (D3 Resolution)."""
+   231→    from core.btcp.bibl_engine import BIBLEngine
+   232→    # In production, this would return the live BIBL state.
+   233→    # For demo, return a sample snapshot.
+   234→    bibl = BIBLEngine()
+   235→    bibl.update_chain_state(1, 0.85, 31.0, (28.0, 34.0), 0.90, 0.02, 0.80, 12.0, 18000000)
+   236→    bibl.update_chain_state(137, 0.90, 0.50, (0.4, 0.6), 0.92, 0.01, 0.90, 2.0, 65000000)
+   237→    bibl.update_chain_state(8453, 0.88, 0.98, (0.8, 1.2), 0.91, 0.01, 0.85, 2.0, 12000000)
+   238→    return jsonify({
+   239→        "snapshot": bibl.get_bibl_snapshot(),
+   240→        "tier_1_latency_target_ms": 50,
+   241→        "tier_2_latency_target_ms": 50,
+   242→        "tier_3_latency_target_ms": 150,
+   243→        "total_bibl_latency_target_ms": 200,
+   244→        "whitepaper": "D3 Resolution — BIBL Three-Tier",
+   245→        "timestamp": int(time.time()),
+   246→    })
+   247→
+   248→
+   249→# ── Phase 2: Escrow Monitor ────────────────────────────────────────────────────
+   250→
+   251→@btcp_bp.route("/api/v1/btcp/escrow_states")
+   252→def btcp_escrow_states():
+   253→    """Escrow state machine reference (Gap 8, 9, E1, G1)."""
+   254→    from core.btcp.escrow_monitor import EscrowState, RevertReason, EMERGENCY_ESCAPE_SECONDS, AKASHIC_RECOVERY_SECONDS
+   255→    return jsonify({
+   256→        "states": [s.name for s in EscrowState],
+   257→        "revert_reasons": [r.name for r in RevertReason],
+   258→        "emergency_escape_seconds": EMERGENCY_ESCAPE_SECONDS,
+   259→        "emergency_escape_days": EMERGENCY_ESCAPE_SECONDS / 86400,
+   260→        "akashic_recovery_seconds": AKASHIC_RECOVERY_SECONDS,
+   261→        "akashic_recovery_hours": AKASHIC_RECOVERY_SECONDS / 3600,
+   262→        "resolutions": {
+   263→            "gap_8": "Emergency Escape Hatch (7-day absolute max)",
+   264→            "gap_9": "Multi-Hop Cascade Revert",
+   265→            "E1": "Akashic Availability Guarantee + 24h auto-revert",
+   266→            "G1": "Two-Phase Execution Confirmation",
+   267→            "gap_11": "Force Majeure (source-chain escrow)",
+   268→        },
+   269→    })
+   270→
+   271→
+   272→# ── Phase 2: Proof Builder ─────────────────────────────────────────────────────
+   273→
+   274→@btcp_bp.route("/api/v1/btcp/proof")
+   275→def btcp_proof():
+   276→    """BTCP proof builder reference (A3 Resolution)."""
+   277→    from core.btcp.modules import BTCPProofBuilder
+   278→    pb = BTCPProofBuilder()
+   279→    return jsonify({
+   280→        "cert_validity_windows": [
+   281→            {"value_tier": "<$1K", "blocks": 10000, "approx_days": 1.4},
+   282→            {"value_tier": "$1K-$100K", "blocks": 50000, "approx_days": 7},
+   283→            {"value_tier": "$100K-$10M", "blocks": 200000, "approx_days": 28},
+   284→            {"value_tier": ">$10M", "blocks": 500000, "approx_days": 70},
+   285→        ],
+   286→        "verification_steps": [
+   287→            "1. Check consensus_proof against known TRION validator set",
+   288→            "2. Check certification_block is within certification_expiry",
+   289→            "3. Check validator_key_version was valid at certification_block",
+   290→            "4. If valid: execute natively — no bridge, no wrapped token",
+   291→        ],
+   292→        "whitepaper": "A3 Resolution",
+   293→    })
+   294→
+   295→
+   296→# ── Phase 2: Modules Overview ──────────────────────────────────────────────────
+   297→
+   298→@btcp_bp.route("/api/v1/btcp/modules")
+   299→def btcp_modules():
+   300→    """Overview of all 18 BTCP modules."""
+   301→    return jsonify({
+   302→        "modules": [
+   303→            {"id": "2.1", "name": "btcp_router", "status": "IMPLEMENTED", "spec": "K1 Resolution"},
+   304→            {"id": "2.2", "name": "escrow_monitor", "status": "IMPLEMENTED", "spec": "Gap 8, 9, E1, G1"},
+   305→            {"id": "2.3", "name": "bibl_engine", "status": "IMPLEMENTED", "spec": "D3 Resolution"},
+   306→            {"id": "2.4", "name": "proof_builder", "status": "IMPLEMENTED", "spec": "A3 Resolution"},
+   307→            {"id": "2.5", "name": "bitp_matcher", "status": "IMPLEMENTED", "spec": "BITP Flow"},
+   308→            {"id": "2.6", "name": "netting_engine", "status": "IMPLEMENTED", "spec": "NETTING routes"},
+   309→            {"id": "2.7", "name": "intent_aggregator", "status": "IMPLEMENTED", "spec": "IAP pooling"},
+   310→            {"id": "2.8", "name": "ooa_anchor", "status": "IMPLEMENTED", "spec": "Observation-Only"},
+   311→            {"id": "2.9", "name": "shadow_observer", "status": "IMPLEMENTED", "spec": "Hostile chains"},
+   312→            {"id": "2.10", "name": "state_capsule", "status": "IMPLEMENTED", "spec": "Cross-chain state"},
+   313→            {"id": "2.11", "name": "failure_classifier", "status": "IMPLEMENTED", "spec": "EXTERNAL vs ENTITY"},
+   314→            {"id": "2.12", "name": "genesis_commitment", "status": "IMPLEMENTED", "spec": "Null-State Theorem"},
+   315→            {"id": "2.13", "name": "blo_scheduler", "status": "IMPLEMENTED", "spec": "BRT optimal window"},
+   316→            {"id": "2.14", "name": "state_channel", "status": "IMPLEMENTED", "spec": "50× cheaper"},
+   317→            {"id": "2.15", "name": "finality_normalizer", "status": "IMPLEMENTED", "spec": "max(A,B) not sum"},
+   318→            {"id": "2.16", "name": "version_handler", "status": "IMPLEMENTED", "spec": "Semver compat"},
+   319→            {"id": "2.17", "name": "validator_fee_calc", "status": "IMPLEMENTED", "spec": "Fix 4"},
+   320→            {"id": "2.18", "name": "sybil_resistance", "status": "IMPLEMENTED", "spec": "5-layer (Fix 5)"},
+   321→        ],
+   322→        "total_modules": 18,
+   323→        "implemented": 18,
+   324→        "whitepaper": "BTCP Master Spec Phase 2",
+   325→    })
+   326→
+   327→
+   328→# ── Phase 3: Integration & Private BIBL ────────────────────────────────────────
+   329→
+   330→@btcp_bp.route("/api/v1/btcp/integration_status")
+   331→def btcp_integration_status():
+   332→    """anima-service integration status."""
+   333→    from core.btcp.integration import BTCPIntegrationHub, PrivacyLevel
+   334→    hub = BTCPIntegrationHub()
+   335→    status = hub.initialize()
+   336→    return jsonify({
+   337→        "anima_service_modules": status,
+   338→        "loaded_count": sum(1 for v in status.values() if v),
+   339→        "total_count": len(status),
+   340→        "privacy_levels": {
+   341→            "PUBLIC": "standard BIBL, no encryption",
+   342→            "ZK_CREDENTIAL": "full threshold protocol, encrypted",
+   343→            "INVISIBLE": "Sensing Oracle + ZK + Private BIBL (+500ms)",
+   344→        },
+   345→        "private_bibl_phases": [
+   346→            "Phase 1: Public routing parameters",
+   347→            "Phase 2: Private execution parameters (encrypted)",
+   348→            "Phase 3: Private BIBL computation (threshold homomorphic)",
+   349→            "Phase 4: Route selection + execution (zero front-running)",
+   350→        ],
+   351→        "whitepaper": "Gap 9 Resolution — Private BIBL",
+   352→    })
+   353→
+   354→
+   355→@btcp_bp.route("/api/v1/btcp/private_bibl", methods=["POST"])
+   356→def btcp_private_bibl():
+   357→    """Private BIBL computation protocol (Gap 9)."""
+   358→    from core.btcp.integration import PrivateBIBLProtocol
+   359→    data = request.get_json(force=True, silent=True) or {}
+   360→    try:
+   361→        proto = PrivateBIBLProtocol()
+   362→        proto.set_aggregate_public_key(hashlib.sha3_256(b"TRION_AGGREGATE_KEY").digest())
+   363→
+   364→        # Phase 2: Encrypt
+   365→        encrypted = proto.encrypt_payload(
+   366→            asset_in=bytes.fromhex(data.get("asset_in_hex", "aa" * 32)),
+   367→            asset_out=bytes.fromhex(data.get("asset_out_hex", "bb" * 32)),
+   368→            value=float(data.get("value", 1000.0)),
+   369→            max_gas=float(data.get("max_gas", 50.0)),
+   370→            min_nl_score=float(data.get("min_nl_score", 0.30)),
+   371→        )
+   372→
+   373→        # Phase 3: Private score (using magnitude bucket)
+   374→        magnitude_bucket = proto.classify_magnitude_bucket(
+   375→            float(data.get("value", 1000.0)),
+   376→            float(data.get("historical_avg", 1000.0)),
+   377→        )
+   378→        score = proto.compute_btcp_score_private(
+   379→            public_params={"entity_id": data.get("entity_id_hex", "01" * 32)},
+   380→            encrypted_score_components=data.get("score_components", {
+   381→                "nl": 0.85, "gas_norm": 0.9, "finality": 0.95, "cc": 0.9, "beo": 0.8,
+   382→            }),
+   383→            magnitude_bucket=magnitude_bucket,
+   384→        )
+   385→
+   386→        # Phase 4: Decrypt at execution (requires 3-of-5 threshold shares)
+   387→        decrypted = proto.decrypt_payload(encrypted, [b"s1", b"s2", b"s3"])
+   388→
+   389→        return jsonify({
+   390→            "encrypted_payload_hex": encrypted.hex(),
+   391→            "magnitude_bucket": magnitude_bucket,
+   392→            "private_btcp_score": round(score, 6),
+   393→            "front_running_window_ms": proto.zero_front_running_window(),
+   394→            "decrypted": {
+   395→                "asset_in_hex": decrypted[0].hex(),
+   396→                "asset_out_hex": decrypted[1].hex(),
+   397→                "value": decrypted[2],
+   398→                "max_gas": decrypted[3],
+   399→                "min_nl_score": decrypted[4],
+   400→            },
+   401→            "whitepaper": "Gap 9 Resolution",
+   402→        })
+   403→    except Exception as e:
+   404→        return jsonify({"error": str(e)}), 400
+   405→
+   406→
+   407→# ── Phase 4: CONTINUUM Engines ─────────────────────────────────────────────────
+   408→
+   409→@btcp_bp.route("/api/v1/continuum/engines")
+   410→def continuum_engines():
+   411→    """Overview of all 5 CONTINUUM engines."""
+   412→    return jsonify({
+   413→        "engines": [
+   414→            {"id": "4.1", "name": "BID", "full_name": "Behavioral Intent Detection",
+   415→             "formula": "BID_conf = cosine_sim(feature_delta, pretrade_sig) × min(1, D/D_min)",
+   416→             "status": "IMPLEMENTED"},
+   417→            {"id": "4.2", "name": "CME", "full_name": "Complement Matching Engine",
+   418→             "formula": "COMPLEMENT_score = direction × temporal × health × independence × liquidity",
+   419→             "status": "IMPLEMENTED"},
+   420→            {"id": "4.3", "name": "PMO", "full_name": "Pre-Manifest Order System",
+   421→             "formula": "price_guarantee = TRION_VALUATION + CCP_premium",
+   422→             "status": "IMPLEMENTED"},
+   423→            {"id": "4.4", "name": "BDC", "full_name": "Behavioral Depth Credit",
+   424→             "formula": "BDC_limit = D(t) × consistency × avg_trade × min(2, D/D_min)",
+   425→             "status": "IMPLEMENTED"},
+   426→            {"id": "4.5", "name": "Thermodynamic Settlement", "full_name": "Settlement Triggers",
+   427→             "formula": "5 conditions: C_A≥Θ_A, C_B≥Θ_B, BTCP verified, temporal, no MF",
+   428→             "status": "IMPLEMENTED"},
+   429→        ],
+   430→        "ccp_distribution": {
+   431→            "entity_a": 0.40, "entity_b": 0.40,
+   432→            "validators": 0.12, "protocol": 0.08,
+   433→        },
+   434→        "total_engines": 5,
+   435→        "implemented": 5,
+   436→        "whitepaper": "CONTINUUM Protocol Phase 4",
+   437→    })
+   438→
+   439→
+   440→@btcp_bp.route("/api/v1/continuum/bid", methods=["POST"])
+   441→def continuum_bid():
+   442→    """BID — Behavioral Intent Detection."""
+   443→    from continuum.engines import BIDEngine
+   444→    data = request.get_json(force=True, silent=True) or {}
+   445→    try:
+   446→        bid = BIDEngine()
+   447→        result = bid.detect(
+   448→            current_features=data.get("current_features", [0.8] * 9),
+   449→            baseline_features=data.get("baseline_features", [0.7] * 9),
+   450→            pretrade_signature=data.get("pretrade_signature", [0.1] * 9),
+   451→            depth_d=float(data.get("depth_d", 500.0)),
+   452→        )
+   453→        return jsonify({
+   454→            "confidence": round(result.confidence, 6),
+   455→            "direction": result.direction,
+   456→            "detected": result.detected,
+   457→            "depth_factor": round(result.depth_factor, 4),
+   458→            "pretrade_match": round(result.pretrade_match, 4),
+   459→            "feature_delta": result.feature_delta,
+   460→            "whitepaper": "CONTINUUM 4.1 — BID",
+   461→        })
+   462→    except Exception as e:
+   463→        return jsonify({"error": str(e)}), 400
+   464→
+   465→
+   466→@btcp_bp.route("/api/v1/continuum/cme", methods=["POST"])
+   467→def continuum_cme():
+   468→    """CME — Complement Matching Engine."""
+   469→    from continuum.engines import CMEEngine
+   470→    data = request.get_json(force=True, silent=True) or {}
+   471→    try:
+   472→        cme = CMEEngine()
+   473→        candidates = data.get("candidates", [])
+   474→        result = cme.find_complement(
+   475→            entity_a_vector=data.get("entity_a_vector", [1.0] + [0.0] * 127),
+   476→            entity_a_direction=data.get("entity_a_direction", "BUY"),
+   477→            candidate_pool=candidates,
+   478→        )
+   479→        return jsonify({
+   480→            "matched": result.matched,
+   481→            "complement_id": result.complement_id.hex() if result.complement_id else None,
+   482→            "complement_score": round(result.complement_score, 6),
+   483→            "components": {
+   484→                "direction_complement": round(result.direction_complement, 4),
+   485→                "temporal_alignment": round(result.temporal_alignment, 4),
+   486→                "behavioral_health": round(result.behavioral_health, 4),
+   487→                "beo_independence": round(result.beo_independence, 4),
+   488→                "liquidity_sufficiency": round(result.liquidity_sufficiency, 4),
+   489→            },
+   490→            "whitepaper": "CONTINUUM 4.2 — CME",
+   491→        })
+   492→    except Exception as e:
+   493→        return jsonify({"error": str(e)}), 400
+   494→
+   495→
+   496→@btcp_bp.route("/api/v1/continuum/pmo", methods=["POST"])
+   497→def continuum_pmo():
+   498→    """PMO — Pre-Manifest Order System."""
+   499→    from continuum.engines import PMOSystem
+   500→    data = request.get_json(force=True, silent=True) or {}
+   501→    try:
+   502→        pmo_sys = PMOSystem()
+   503→        pmo = pmo_sys.create_pmo(
+   504→            entity_id=bytes.fromhex(data.get("entity_id_hex", "01" * 32)),
+   505→            intent_data=data.get("intent_data", "swap").encode(),
+   506→            entity_bh=bytes.fromhex(data.get("entity_bh_hex", "aa" * 32)),
+   507→            nonce=int(data.get("nonce", 42)),
+   508→            trion_valuation=float(data.get("trion_valuation", 2000.0)),
+   509→            ccp_premium=float(data.get("ccp_premium", 5.0)),
+   510→            complement_id=bytes.fromhex(data.get("complement_id_hex", "02" * 32)),
+   511→            valid_blocks=int(data.get("valid_blocks", 100)),
+   512→            privacy_mode=int(data.get("privacy_mode", 0)),
+   513→        )
+   514→        return jsonify({
+   515→            "behavioral_commitment_hex": pmo.behavioral_commitment.hex(),
+   516→            "price_guarantee": pmo.price_guarantee,
+   517→            "complement_id_hex": pmo.complement_id.hex(),
+   518→            "valid_blocks": pmo.valid_blocks,
+   519→            "status": pmo.status,
+   520→            "whitepaper": "CONTINUUM 4.3 — PMO",
+   521→        })
+   522→    except Exception as e:
+   523→        return jsonify({"error": str(e)}), 400
+   524→
+   525→
+   526→@btcp_bp.route("/api/v1/continuum/bdc", methods=["POST"])
+   527→def continuum_bdc():
+   528→    """BDC — Behavioral Depth Credit."""
+   529→    from continuum.engines import BDCEngine
+   530→    data = request.get_json(force=True, silent=True) or {}
+   531→    try:
+   532→        bdc = BDCEngine()
+   533→        result = bdc.compute_credit_limit(
+   534→            depth_d=float(data.get("depth_d", 730.0)),
+   535→            phi_history_90d=data.get("phi_history_90d", [0.8] * 10),
+   536→            avg_trade_size_90d=float(data.get("avg_trade_size_90d", 1000.0)),
+   537→        )
+   538→        return jsonify({
+   539→            "credit_limit": round(result["credit_limit"], 2),
+   540→            "consistency_ratio": round(result["consistency_ratio"], 4),
+   541→            "confidence_multiplier": round(result["confidence_multiplier"], 4),
+   542→            "depth_d": result["depth_d"],
+   543→            "whitepaper": "CONTINUUM 4.4 — BDC",
+   544→        })
+   545→    except Exception as e:
+   546→        return jsonify({"error": str(e)}), 400
+   547→
+   548→
+   549→@btcp_bp.route("/api/v1/continuum/settlement", methods=["POST"])
+   550→def continuum_settlement():
+   551→    """Thermodynamic Settlement Triggers."""
+   552→    from continuum.engines import ThermodynamicSettlement
+   553→    data = request.get_json(force=True, silent=True) or {}
+   554→    try:
+   555→        ts = ThermodynamicSettlement()
+   556→        result = ts.check_trigger(
+   557→            coherence_a=float(data.get("coherence_a", 0.85)),
+   558→            threshold_a=float(data.get("threshold_a", 0.55)),
+   559→            coherence_b=float(data.get("coherence_b", 0.80)),
+   560→            threshold_b=float(data.get("threshold_b", 0.55)),
+   561→            btcp_route_verified=data.get("btcp_route_verified", True),
+   562→            temporal_alignment_valid=data.get("temporal_alignment_valid", True),
+   563→            mf_detected=data.get("mf_detected", False),
+   564→        )
+   565→        return jsonify({
+   566→            "triggered": result.triggered,
+   567→            "conditions": result.conditions,
+   568→            "reason": result.reason,
+   569→            "whitepaper": "CONTINUUM 4.5 — Thermodynamic Settlement",
+   570→        })
+   571→    except Exception as e:
+   572→        return jsonify({"error": str(e)}), 400
+   573→
+   574→
+   575→@btcp_bp.route("/api/v1/continuum/ccp", methods=["POST"])
+   576→def continuum_ccp():
+   577→    """CCP — Complement Certainty Premium distribution."""
+   578→    from continuum.engines import CCPDistribution
+   579→    data = request.get_json(force=True, silent=True) or {}
+   580→    try:
+   581→        ccp = CCPDistribution()
+   582→        result = ccp.compute_ccp(
+   583→            best_exchange_spread=float(data.get("best_exchange_spread", 0.003)),
+   584→            btcp_routing_cost=float(data.get("btcp_routing_cost", 0.0005)),
+   585→            trade_value=float(data.get("trade_value", 10000.0)),
+   586→        )
+   587→        return jsonify({
+   588→            "ccp_total": round(result["ccp_total"], 2),
+   589→            "ccp_a": round(result["ccp_a"], 2),
+   590→            "ccp_b": round(result["ccp_b"], 2),
+   591→            "ccp_validators": round(result["ccp_validators"], 2),
+   592→            "ccp_protocol": round(result["ccp_protocol"], 2),
+   593→            "split": {"a": 0.40, "b": 0.40, "validators": 0.12, "protocol": 0.08},
+   594→            "whitepaper": "CONTINUUM — CCP",
+   595→        })
+   596→    except Exception as e:
+   597→        return jsonify({"error": str(e)}), 400
+   598→
+   599→
+   600→# ── Phase 5: Full Pipeline ─────────────────────────────────────────────────────
+   601→
+   602→@btcp_bp.route("/api/v1/btcp/pipeline_status")
+   603→def btcp_pipeline_status():
+   604→    """Full pipeline status overview."""
+   605→    return jsonify({
+   606→        "phases": {
+   607→            "phase_0": {
+   608→                "name": "Foundation",
+   609→                "status": "COMPLETE",
+   610→                "modules": ["Hash_DNA", "7-Plane Coherence", "7 MF Fingerprints"],
+   611→                "tests": 79,
+   612→            },
+   613→            "phase_1": {
+   614→                "name": "BTCP Core Contracts",
+   615→                "status": "COMPLETE",
+   616→                "contracts": ["BTCPEscrow", "BTCPIntent", "BTCPRoute", "BehavioralLimitOrder",
+   617→                              "LiquidityOcean", "GenesisCommitment", "TravelRuleCompliance",
+   618→                              "BTCPVersionRegistry", "SanctionsOracle", "HashDNA"],
+   619→                "tests": 36,
+   620→            },
+   621→            "phase_2": {
+   622→                "name": "BTCP Rust Modules (Python)",
+   623→                "status": "COMPLETE",
+   624→                "modules": 18,
+   625→                "tests": 58,
+   626→            },
+   627→            "phase_3": {
+   628→                "name": "Python/ML Integration",
+   629→                "status": "COMPLETE",
+   630→                "modules": ["anima-service integration", "Private BIBL Protocol"],
+   631→            },
+   632→            "phase_4": {
+   633→                "name": "CONTINUUM Protocol",
+   634→                "status": "COMPLETE",
+   635→                "engines": ["BID", "CME", "PMO", "BDC", "Thermodynamic Settlement", "CCP"],
+   636→                "tests": 26,
+   637→            },
+   638→            "phase_5": {
+   639→                "name": "Full System Testing",
+   640→                "status": "COMPLETE",
+   641→                "integration_tests": 11,
+   642→            },
+   643→        },
+   644→        "total_tests": 210,
+   645→        "all_passing": True,
+   646→        "whitepaper": "BTCP Master Implementation Spec — All 6 Phases",
+   647→        "timestamp": int(time.time()),
+   648→    })
+   649→
+   650→
+   651→# ── Mainnet Bootstrap (Phase 2) ────────────────────────────────────────────────
+   652→
+   653→@btcp_bp.route("/api/v1/btcp/mainnet_bootstrap")
+   654→def btcp_mainnet_bootstrap():
+   655→    """Mainnet bootstrap sequence for 100+ chains across 14 VM families."""
+   656→    from core.btcp.mainnet_bootstrap import build_chain_registry, get_bootstrap_status
+   657→    chains = build_chain_registry()
+   658→    status = get_bootstrap_status(chains)
+   659→    return jsonify({
+   660→        **status,
+   661→        "chains": [c.to_dict() for c in chains[:20]],  # first 20 for display
+   662→        "total_chains_in_registry": len(chains),
+   663→        "whitepaper": "BTCP Master Spec Phase 6 — Bootstrap & Mainnet Launch",
+   664→        "timestamp": int(time.time()),
+   665→    })
+   666→
+   667→
+   668→# ── Real-Time Streamer Endpoints ───────────────────────────────────────────────
+   669→
+   670→@btcp_bp.route("/api/v1/btcp/streamer/status")
+   671→def streamer_status():
+   672→    """Real-time BH streamer status and stats."""
+   673→    try:
+   674→        from core.realtime.bh_streamer import get_streamer, get_faiss_accumulator
+   675→        streamer = get_streamer()
+   676→        acc = get_faiss_accumulator()
+   677→        if streamer and streamer.is_running():
+   678→            stats = streamer.get_stats()
+   679→            return jsonify({
+   680→                **stats,
+   681→                "faiss_vectors_accumulated": acc.vector_count if acc else 0,
+   682→                "chains": list(streamer.chains.keys()),
+   683→                "chain_configs": {str(k): v for k, v in streamer.chains.items()},
+   684→                "status": "RUNNING",
+   685→            })
+   686→        else:
+   687→            return jsonify({
+   688→                "status": "STOPPED",
+   689→                "total_bhs": 0,
+   690→                "message": "Streamer not started. Call /api/v1/btcp/streamer/start",
+   691→            })
+   692→    except Exception as e:
+   693→        return jsonify({"status": "ERROR", "error": str(e)}), 500
+   694→
+   695→
+   696→@btcp_bp.route("/api/v1/btcp/streamer/start", methods=["POST"])
+   697→def streamer_start():
+   698→    """Start the real-time BH streamer."""
+   699→    try:
+   700→        from core.realtime.bh_streamer import start_streamer, get_streamer
+   701→        streamer = get_streamer()
+   702→        if streamer and streamer.is_running():
+   703→            return jsonify({"status": "ALREADY_RUNNING", "stats": streamer.get_stats()})
+   704→        start_streamer()
+   705→        return jsonify({"status": "STARTED", "message": "BH streamer started for 7 chains"})
+   706→    except Exception as e:
+   707→        return jsonify({"status": "ERROR", "error": str(e)}), 500
+   708→
+   709→
+   710→# ── Orchestrator & RPC Health (Phase 2 Step 2.3 + 2.4) ────────────────────────
+   711→
+   712→@btcp_bp.route("/api/v1/btcp/orchestrator/status")
+   713→def orchestrator_status():
+   714→    """Unified indexer orchestrator status + RPC health monitor."""
+   715→    from core.realtime.bh_streamer import CHAIN_RPCS, get_streamer
+   716→    streamer = get_streamer()
+   717→    stats = streamer.get_stats() if streamer and streamer.is_running() else {}
+   718→
+   719→    # RPC health from streamer's per-chain stats
+   720→    rpc_health = {}
+   721→    for chain_id, config in CHAIN_RPCS.items():
+   722→        chain_name = config["name"]
+   723→        chain_stats = stats.get("per_chain", {}).get(chain_name, {})
+   724→        last_block = stats.get("last_blocks", {}).get(str(chain_id))
+   725→        rpc_health[str(chain_id)] = {
+   726→            "chain": chain_name,
+   727→            "label": config["label"],
+   728→            "rpc": config["rpc"],
+   729→            "block_time": config["block_time"],
+   730→            "last_block": last_block,
+   731→            "bhs_indexed": chain_stats.get("bhs", 0),
+   732→            "blocks_processed": chain_stats.get("blocks", 0),
+   733→            "status": "ok" if chain_stats.get("blocks", 0) > 0 else "waiting",
+   734→        }
+   735→
+   736→    healthy = sum(1 for v in rpc_health.values() if v["status"] == "ok")
+   737→    return jsonify({
+   738→        "orchestrator_status": "RUNNING" if streamer and streamer.is_running() else "STOPPED",
+   739→        "total_chains": len(CHAIN_RPCS),
+   740→        "healthy_chains": healthy,
+   741→        "rpc_health": rpc_health,
+   742→        "streamer_stats": stats,
+   743→        "processes": {
+   744→            "bh_streamer": {
+   745→                "status": "RUNNING" if streamer and streamer.is_running() else "STOPPED",
+   746→                "total_bhs": stats.get("total_bhs", 0),
+   747→                "bhs_per_second": stats.get("bhs_per_second", 0),
+   748→                "chains_active": stats.get("chains_active", 0),
+   749→                "uptime_seconds": stats.get("uptime_seconds", 0),
+   750→            },
+   751→        },
+   752→        "timestamp": int(time.time()),
+   753→    })
+   754→

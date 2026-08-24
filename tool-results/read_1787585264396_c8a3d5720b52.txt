@@ -1,0 +1,812 @@
+     1→/**
+     2→ * TRION UI - Shared components for the dashboard.
+     3→ */
+     4→'use client';
+     5→
+     6→import React, { useState, useEffect, useRef } from 'react';
+     7→import { fetchAPI, fmt, pct, tfmt, dtfmt, truncate, hex, compact, statusColor, ms } from '../lib/api';
+     8→
+     9→// ════════════════════════════════════════════════════════════════════════════
+    10→// PRIMITIVES
+    11→// ════════════════════════════════════════════════════════════════════════════
+    12→
+    13→export function Card({
+    14→  title,
+    15→  subtitle,
+    16→  children,
+    17→  live,
+    18→  right,
+    19→  collapsible,
+    20→}: {
+    21→  title: string;
+    22→  subtitle?: string;
+    23→  children: React.ReactNode;
+    24→  live?: boolean;
+    25→  right?: React.ReactNode;
+    26→  collapsible?: boolean;
+    27→}) {
+    28→  const [open, setOpen] = useState(true);
+    29→  return (
+    30→    <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden transition-all hover:shadow-md">
+    31→      <div className="flex items-center justify-between p-4 md:p-5 border-b border-border">
+    32→        <div className="flex items-center gap-2 flex-1 min-w-0">
+    33→          <div className="min-w-0">
+    34→            <div className="font-semibold text-sm md:text-base truncate">{title}</div>
+    35→            {subtitle && <div className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</div>}
+    36→          </div>
+    37→          {live && (
+    38→            <span className="flex items-center gap-1.5 text-xs text-green-500 font-medium ml-2 flex-shrink-0">
+    39→              <span className="relative flex h-2 w-2">
+    40→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+    41→                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+    42→              </span>
+    43→              LIVE
+    44→            </span>
+    45→          )}
+    46→        </div>
+    47→        <div className="flex items-center gap-2 flex-shrink-0">
+    48→          {right}
+    49→          {collapsible && (
+    50→            <button onClick={() => setOpen(!open)} className="text-muted-foreground hover:text-foreground p-1">
+    51→              {open ? '-' : '+'}
+    52→            </button>
+    53→          )}
+    54→        </div>
+    55→      </div>
+    56→      {open && <div className="p-4 md:p-5">{children}</div>}
+    57→    </div>
+    58→  );
+    59→}
+    60→
+    61→export function StatCard({
+    62→  label,
+    63→  value,
+    64→  sub,
+    65→  trend,
+    66→  color = 'default',
+    67→  icon,
+    68→}: {
+    69→  label: string;
+    70→  value: string | number | React.ReactNode;
+    71→  sub?: string;
+    72→  trend?: 'up' | 'down' | 'flat';
+    73→  color?: 'default' | 'green' | 'amber' | 'red' | 'blue' | 'purple';
+    74→  icon?: React.ReactNode;
+    75→}) {
+    76→  const colors = {
+    77→    default: 'border-border',
+    78→    green: 'border-green-500/30 bg-green-500/5',
+    79→    amber: 'border-amber-500/30 bg-amber-500/5',
+    80→    red: 'border-red-500/30 bg-red-500/5',
+    81→    blue: 'border-blue-500/30 bg-blue-500/5',
+    82→    purple: 'border-purple-500/30 bg-purple-500/5',
+    83→  };
+    84→  const trendIcon = trend === 'up' ? 'up' : trend === 'down' ? 'down' : '';
+    85→  return (
+    86→    <div className={`bg-card rounded-2xl p-4 md:p-5 border ${colors[color]} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
+    87→      {icon && <div className="mb-2 text-muted-foreground">{icon}</div>}
+    88→      <div 
+    89→        className="font-bold mb-1.5 ticker break-all"
+    90→        style={{
+    91→          fontSize: typeof value === 'string' && value.length > 12 
+    92→            ? 'clamp(0.75rem, 1.5vw, 1rem)' 
+    93→            : typeof value === 'string' && value.length > 8
+    94→              ? 'clamp(0.9rem, 1.8vw, 1.25rem)'
+    95→              : 'clamp(1.1rem, 2.2vw, 1.5rem)',
+    96→          lineHeight: 1.2,
+    97→          wordBreak: 'break-all',
+    98→          overflowWrap: 'anywhere',
+    99→        }}
+   100→        title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+   101→      >{value}</div>
+   102→      <div className="flex items-center justify-between gap-2 min-w-0">
+   103→        <span className="text-xs text-muted-foreground truncate min-w-0 flex-1" style={{fontSize: "clamp(0.65rem, 1.1vw, 0.75rem)"}}>{label}</span>
+   104→        {sub && <span className="text-xs font-semibold flex items-center gap-1 flex-shrink-0 truncate max-w-[50%]">{trendIcon}{sub}</span>}
+   105→      </div>
+   106→    </div>
+   107→  );
+   108→}
+   109→
+   110→export function ProgressBar({
+   111→  value,
+   112→  max = 1,
+   113→  color = 'primary',
+   114→  height = 8,
+   115→  label,
+   116→  showValue = false,
+   117→}: {
+   118→  value: number;
+   119→  max?: number;
+   120→  color?: 'primary' | 'green' | 'amber' | 'red' | 'blue' | 'purple';
+   121→  height?: number;
+   122→  label?: string;
+   123→  showValue?: boolean;
+   124→}) {
+   125→  const v = Math.max(0, Math.min(1, value / max));
+   126→  const colors = {
+   127→    primary: 'bg-blue-500',
+   128→    green: 'bg-green-500',
+   129→    amber: 'bg-amber-500',
+   130→    red: 'bg-red-500',
+   131→    blue: 'bg-blue-500',
+   132→    purple: 'bg-purple-500',
+   133→  };
+   134→  return (
+   135→    <div>
+   136→      {label && (
+   137→        <div className="flex justify-between mb-1 text-xs gap-2 min-w-0">
+   138→          <span className="text-muted-foreground truncate min-w-0">{label}</span>
+   139→          {showValue && <span className="font-mono flex-shrink-0">{(v * 100).toFixed(1)}%</span>}
+   140→        </div>
+   141→      )}
+   142→      <div className="bg-muted rounded-full overflow-hidden" style={{ height }}>
+   143→        <div
+   144→          className={`${colors[color]} rounded-full transition-all duration-500`}
+   145→          style={{ width: `${v * 100}%`, height: '100%' }}
+   146→        />
+   147→      </div>
+   148→    </div>
+   149→  );
+   150→}
+   151→
+   152→export function Badge({ status, label }: { status?: any; label?: string }) {
+   153→  const color = statusColor(status || label);
+   154→  const colors: Record<string, string> = {
+   155→    green: 'bg-green-500/10 text-green-600 border-green-500/30',
+   156→    amber: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+   157→    red: 'bg-red-500/10 text-red-600 border-red-500/30',
+   158→    blue: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+   159→    gray: 'bg-gray-500/10 text-gray-500 border-gray-500/30',
+   160→  };
+   161→  return (
+   162→    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border max-w-[200px] truncate ${colors[color]}`} title={label || String(status || '')}>
+   163→      <span className="truncate">{label || String(status || 'N/A')}</span>
+   164→    </span>
+   165→  );
+   166→}
+   167→
+   168→export function DataTable({
+   169→  headers,
+   170→  rows,
+   171→  maxHeight = 320,
+   172→  emptyMessage = 'Loading...',
+   173→  sortable = false,
+   174→  exportable = false,
+   175→  exportName = 'trion_export',
+   176→  onRowClick,
+   177→  copyableColumns,
+   178→}: {
+   179→  headers: string[];
+   180→  rows: (string | React.ReactNode)[][];
+   181→  maxHeight?: number;
+   182→  emptyMessage?: string;
+   183→  sortable?: boolean;
+   184→  exportable?: boolean;
+   185→  exportName?: string;
+   186→  onRowClick?: (rowIdx: number) => void;
+   187→  copyableColumns?: number[]; // column indices that should show a copy button
+   188→}) {
+   189→  const [sortCol, setSortCol] = useState<number | null>(null);
+   190→  const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
+   191→
+   192→  // Apply sort
+   193→  let displayRows = rows;
+   194→  if (sortable && sortCol !== null && sortDir !== null) {
+   195→    displayRows = [...rows].sort((a, b) => {
+   196→      const av = a[sortCol];
+   197→      const bv = b[sortCol];
+   198→      // Try numeric compare first
+   199→      const an = typeof av === 'string' ? parseFloat(av.replace(/[^0-9.-]/g, '')) : NaN;
+   200→      const bn = typeof bv === 'string' ? parseFloat(bv.replace(/[^0-9.-]/g, '')) : NaN;
+   201→      if (!isNaN(an) && !isNaN(bn)) {
+   202→        return sortDir === 'asc' ? an - bn : bn - an;
+   203→      }
+   204→      const as = String(av ?? '');
+   205→      const bs = String(bv ?? '');
+   206→      return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+   207→    });
+   208→  }
+   209→
+   210→  const handleSort = (colIdx: number) => {
+   211→    if (!sortable) return;
+   212→    if (sortCol === colIdx) {
+   213→      // Cycle: asc {'->'} desc {'->'} null
+   214→      if (sortDir === 'asc') setSortDir('desc');
+   215→      else if (sortDir === 'desc') { setSortCol(null); setSortDir(null); }
+   216→    } else {
+   217→      setSortCol(colIdx);
+   218→      setSortDir('asc');
+   219→    }
+   220→  };
+   221→
+   222→  const exportCSV = () => {
+   223→    const csv = [
+   224→      headers.join(','),
+   225→      ...rows.map(r => r.map(c => {
+   226→        const s = typeof c === 'string' ? c : String(c ?? '');
+   227→        return `"${s.replace(/"/g, '""')}"`;
+   228→      }).join(',')),
+   229→    ].join('\n');
+   230→    const blob = new Blob([csv], { type: 'text/csv' });
+   231→    const url = URL.createObjectURL(blob);
+   232→    const a = document.createElement('a');
+   233→    a.href = url;
+   234→    a.download = `${exportName}.csv`;
+   235→    a.click();
+   236→    URL.revokeObjectURL(url);
+   237→  };
+   238→
+   239→  const exportJSON = () => {
+   240→    const data = rows.map(r => {
+   241→      const obj: Record<string, any> = {};
+   242→      headers.forEach((h, i) => { obj[h] = r[i]; });
+   243→      return obj;
+   244→    });
+   245→    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+   246→    const url = URL.createObjectURL(blob);
+   247→    const a = document.createElement('a');
+   248→    a.href = url;
+   249→    a.download = `${exportName}.json`;
+   250→    a.click();
+   251→    URL.revokeObjectURL(url);
+   252→  };
+   253→
+   254→  const copyCell = (val: React.ReactNode) => {
+   255→    const s = typeof val === 'string' ? val : String(val ?? '');
+   256→    navigator.clipboard?.writeText(s).catch(() => {});
+   257→  };
+   258→
+   259→  return (
+   260→    <div>
+   261→      {exportable && rows.length > 0 && (
+   262→        <div className="flex justify-end gap-2 mb-2">
+   263→          <button
+   264→            onClick={exportCSV}
+   265→            className="text-xs px-2 py-1 rounded border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+   266→            aria-label="Export as CSV"
+   267→          >
+   268→            down CSV
+   269→          </button>
+   270→          <button
+   271→            onClick={exportJSON}
+   272→            className="text-xs px-2 py-1 rounded border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+   273→            aria-label="Export as JSON"
+   274→          >
+   275→            down JSON
+   276→          </button>
+   277→        </div>
+   278→      )}
+   279→      <div className="overflow-auto" style={{ maxHeight }}>
+   280→        <table className="w-full text-sm">
+   281→          <thead className="bg-muted/50 sticky top-0 backdrop-blur">
+   282→            <tr>
+   283→              {headers.map((h, i) => (
+   284→                <th
+   285→                  key={i}
+   286→                  onClick={() => handleSort(i)}
+   287→                  className={`text-left p-2 md:p-3 text-xs font-semibold text-muted-foreground whitespace-nowrap ${
+   288→                    sortable ? 'cursor-pointer hover:text-foreground select-none' : ''
+   289→                  }`}
+   290→                  aria-sort={sortCol === i ? (sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : 'none') : undefined}
+   291→                >
+   292→                  {h}
+   293→                  {sortable && sortCol === i && (
+   294→                    <span className="ml-1" aria-hidden>
+   295→                      {sortDir === 'asc' ? 'up' : sortDir === 'desc' ? 'down' : ''}
+   296→                    </span>
+   297→                  )}
+   298→                </th>
+   299→              ))}
+   300→            </tr>
+   301→          </thead>
+   302→          <tbody>
+   303→            {displayRows.length === 0 ? (
+   304→              <tr>
+   305→                <td colSpan={headers.length} className="p-8 text-center text-muted-foreground">
+   306→                  {emptyMessage}
+   307→                </td>
+   308→              </tr>
+   309→            ) : (
+   310→              displayRows.map((row, i) => (
+   311→                <tr
+   312→                  key={i}
+   313→                  className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${
+   314→                    onRowClick ? 'cursor-pointer' : ''
+   315→                  }`}
+   316→                  onClick={onRowClick ? () => onRowClick(i) : undefined}
+   317→                >
+   318→                  {row.map((cell, j) => (
+   319→                    <td key={j} className="p-2 md:p-3 whitespace-nowrap max-w-[240px]">
+   320→                      <div className="flex items-center gap-1.5 overflow-hidden">
+   321→                        <span className="truncate">{cell}</span>
+   322→                        {copyableColumns?.includes(j) && cell && (
+   323→                          <button
+   324→                            onClick={(e) => { e.stopPropagation(); copyCell(cell); }}
+   325→                            className="text-[10px] opacity-30 hover:opacity-100 transition-opacity text-muted-foreground"
+   326→                            title="Copy to clipboard"
+   327→                            aria-label="Copy value"
+   328→                          >
+   329→                            ⧉
+   330→                          </button>
+   331→                        )}
+   332→                      </div>
+   333→                    </td>
+   334→                  ))}
+   335→                </tr>
+   336→              ))
+   337→            )}
+   338→          </tbody>
+   339→        </table>
+   340→      </div>
+   341→    </div>
+   342→  );
+   343→}
+   344→
+   345→export function CodeBlock({ code, label }: { code: string; label?: string }) {
+   346→  return (
+   347→    <div>
+   348→      {label && <div className="text-xs text-muted-foreground mb-1">{label}</div>}
+   349→      <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-auto max-h-60 border border-border">
+   350→        {code}
+   351→      </pre>
+   352→    </div>
+   353→  );
+   354→}
+   355→
+   356→export function KVList({ items }: { items: [string, React.ReactNode][] }) {
+   357→  return (
+   358→    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   359→      {items.map(([k, v]) => (
+   360→        <div key={k} className="flex flex-col min-w-0 overflow-hidden">
+   361→          <span className="text-xs text-muted-foreground truncate">{k}</span>
+   362→          <span className="font-mono text-sm font-semibold break-all">{v}</span>
+   363→        </div>
+   364→      ))}
+   365→    </div>
+   366→  );
+   367→}
+   368→
+   369→export function EntityInput({
+   370→  onSubmit,
+   371→  placeholder = 'Entity ID or address...',
+   372→  defaultValue,
+   373→  samples,
+   374→}: {
+   375→  onSubmit: (id: string) => void;
+   376→  placeholder?: string;
+   377→  defaultValue?: string;
+   378→  samples?: string[]; // quick-fill sample entity IDs
+   379→}) {
+   380→  const [val, setVal] = useState(defaultValue || '');
+   381→  return (
+   382→    <div className="space-y-2">
+   383→      <form
+   384→        onSubmit={e => { e.preventDefault(); onSubmit(val); }}
+   385→        className="flex gap-2"
+   386→      >
+   387→        <input
+   388→          type="text"
+   389→          value={val}
+   390→          onChange={e => setVal(e.target.value)}
+   391→          placeholder={placeholder}
+   392→          aria-label="Entity ID or address"
+   393→          className="flex-1 px-3 py-2 rounded-lg border border-border bg-input text-sm font-mono"
+   394→        />
+   395→        <button
+   396→          type="submit"
+   397→          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+   398→        >
+   399→          Load
+   400→        </button>
+   401→      </form>
+   402→      {samples && samples.length > 0 && (
+   403→        <div className="flex flex-wrap items-center gap-2">
+   404→          <span className="text-xs text-muted-foreground">Try:</span>
+   405→          {samples.map((s, i) => (
+   406→            <button
+   407→              key={i}
+   408→              onClick={() => { setVal(s); onSubmit(s); }}
+   409→              className="px-2 py-1 rounded text-xs font-mono bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+   410→              title={s}
+   411→            >
+   412→              {s.slice(0, 10)}...{s.slice(-4)}
+   413→            </button>
+   414→          ))}
+   415→        </div>
+   416→      )}
+   417→    </div>
+   418→  );
+   419→}
+   420→
+   421→export function Spinner({ size = 16 }: { size?: number }) {
+   422→  return (
+   423→    <div
+   424→      className="border-2 border-muted border-t-primary rounded-full animate-spin"
+   425→      style={{ width: size, height: size }}
+   426→    />
+   427→  );
+   428→}
+   429→
+   430→export function EmptyState({ message }: { message: string }) {
+   431→  return (
+   432→    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   433→      <div className="text-4xl mb-2 opacity-30">N/A</div>
+   434→      <div className="text-sm">{message}</div>
+   435→    </div>
+   436→  );
+   437→}
+   438→
+   439→// ════════════════════════════════════════════════════════════════════════════
+   440→// Phase 3.2: Loading & Error States
+   441→// ════════════════════════════════════════════════════════════════════════════
+   442→
+   443→export function Skeleton({ className = '', count = 1 }: { className?: string; count?: number }) {
+   444→  // Render `count` skeleton bars stacked vertically - useful for lists/tables
+   445→  if (count > 1) {
+   446→    return (
+   447→      <div className="space-y-2">
+   448→        {Array.from({ length: count }).map((_, i) => (
+   449→          <div key={i} className={`animate-pulse bg-muted rounded ${className || 'h-4 w-full'}`} />
+   450→        ))}
+   451→      </div>
+   452→    );
+   453→  }
+   454→  return <div className={`animate-pulse bg-muted rounded ${className || 'h-4 w-full'}`} />;
+   455→}
+   456→
+   457→export function SkeletonCard({ lines = 3 }: { lines?: number }) {
+   458→  // A full Card skeleton for dashboard loading states
+   459→  return (
+   460→    <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+   461→      <div className="flex items-center justify-between mb-4">
+   462→        <Skeleton className="h-5 w-32" />
+   463→        <Skeleton className="h-3 w-12" />
+   464→      </div>
+   465→      <div className="space-y-3">
+   466→        {Array.from({ length: lines }).map((_, i) => (
+   467→          <Skeleton key={i} className={`h-4 ${i === 0 ? 'w-full' : i === 1 ? 'w-5/6' : 'w-4/6'}`} />
+   468→        ))}
+   469→      </div>
+   470→    </div>
+   471→  );
+   472→}
+   473→
+   474→export function ErrorState({
+   475→  message,
+   476→  onRetry,
+   477→  type,
+   478→}: {
+   479→  message: string;
+   480→  onRetry?: () => void;
+   481→  type?: 'network' | 'timeout' | 'invalid_json' | 'server' | 'aborted';
+   482→}) {
+   483→  const icon = type === 'timeout' ? '⏱' : type === 'server' ? '⚠' : type === 'network' ? '📡' : '⚠';
+   484→  const label = type
+   485→    ? `${type.toUpperCase()} ERROR`
+   486→    : 'ERROR';
+   487→  return (
+   488→    <div
+   489→      role="alert"
+   490→      className="flex flex-col items-center justify-center py-12 px-4 text-center"
+   491→    >
+   492→      <div className="text-4xl mb-3 opacity-50" aria-hidden>{icon}</div>
+   493→      <div className="text-xs font-mono uppercase tracking-wider text-red-500 mb-2">{label}</div>
+   494→      <div className="text-sm text-muted-foreground mb-4 max-w-md break-words">{message}</div>
+   495→      {onRetry && (
+   496→        <button
+   497→          onClick={onRetry}
+   498→          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity"
+   499→        >
+   500→          Retry
+   501→        </button>
+   502→      )}
+   503→    </div>
+   504→  );
+   505→}
+   506→
+   507→export function LoadingState({ message = 'Loading...' }: { message?: string }) {
+   508→  return (
+   509→    <div className="flex items-center justify-center py-12 text-muted-foreground">
+   510→      <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin mr-3" />
+   511→      <span className="text-sm">{message}</span>
+   512→    </div>
+   513→  );
+   514→}
+   515→
+   516→export function Tag({ children, color = 'default' }: { children: React.ReactNode; color?: 'default' | 'green' | 'amber' | 'red' | 'blue' }) {
+   517→  const colors = {
+   518→    default: 'bg-muted text-muted-foreground',
+   519→    green: 'bg-green-500/10 text-green-600',
+   520→    amber: 'bg-amber-500/10 text-amber-600',
+   521→    red: 'bg-red-500/10 text-red-600',
+   522→    blue: 'bg-blue-500/10 text-blue-600',
+   523→  };
+   524→  return (
+   525→    <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${colors[color]}`}>
+   526→      {children}
+   527→    </span>
+   528→  );
+   529→}
+   530→
+   531→// ════════════════════════════════════════════════════════════════════════════
+   532→// STREAMING - BH/signal live stream visualization
+   533→// ════════════════════════════════════════════════════════════════════════════
+   534→
+   535→export function StreamView({
+   536→  items,
+   537→  speedMs,
+   538→  columns,
+   539→  title = 'Live Stream',
+   540→}: {
+   541→  items: any[];
+   542→  speedMs: number;
+   543→  columns: { key: string; label: string; render?: (v: any, row: any) => React.ReactNode }[];
+   544→  title?: string;
+   545→}) {
+   546→  return (
+   547→    <div>
+   548→      <div className="flex items-center justify-between mb-3 text-xs">
+   549→        <div className="flex items-center gap-2">
+   550→          <span className="relative flex h-2 w-2">
+   551→            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+   552→            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+   553→          </span>
+   554→          <span className="text-muted-foreground">{items.length} records buffered</span>
+   555→        </div>
+   556→        <div className="flex items-center gap-3 font-mono">
+   557→          <span className="text-green-500" title="API round-trip latency (not BH computation speed)">⚡ API {ms(speedMs)}</span>
+   558→          <span className="text-muted-foreground">{(1000 / Math.max(speedMs, 1)).toFixed(0)} Hz</span>
+   559→        </div>
+   560→      </div>
+   561→      <div className="stream-line h-0.5 bg-border rounded mb-2" />
+   562→      <div className="overflow-auto max-h-80">
+   563→        <table className="w-full text-xs">
+   564→          <thead className="bg-muted/50 sticky top-0">
+   565→            <tr>
+   566→              {columns.map(c => (
+   567→                <th key={c.key} className="text-left p-2 font-semibold text-muted-foreground whitespace-nowrap">
+   568→                  {c.label}
+   569→                </th>
+   570→              ))}
+   571→            </tr>
+   572→          </thead>
+   573→          <tbody>
+   574→            {items.length === 0 ? (
+   575→              <tr><td colSpan={columns.length} className="p-6 text-center text-muted-foreground">Awaiting data...</td></tr>
+   576→            ) : (
+   577→              items.map((row, i) => (
+   578→                <tr key={i} className="border-b border-border/30 hover:bg-muted/30">
+   579→                  {columns.map(c => (
+   580→                    <td key={c.key} className="p-2 whitespace-nowrap max-w-[200px]">
+   581→                      <span className="truncate inline-block max-w-full">
+   582→                        {c.render ? c.render(row[c.key], row) : String(row[c.key] ?? 'N/A')}
+   583→                      </span>
+   584→                    </td>
+   585→                  ))}
+   586→                </tr>
+   587→              ))
+   588→            )}
+   589→          </tbody>
+   590→        </table>
+   591→      </div>
+   592→    </div>
+   593→  );
+   594→}
+   595→
+   596→// ════════════════════════════════════════════════════════════════════════════
+   597→// ARCHITECTURE FLOW DIAGRAM (SVG)
+   598→// ════════════════════════════════════════════════════════════════════════════
+   599→
+   600→export function ArchitectureFlow({ compact: compactMode }: { compact?: boolean }) {
+   601→  const height = compactMode ? 360 : 520;
+   602→  return (
+   603→    <svg viewBox="0 0 900 520" className="w-full h-auto" style={{ maxHeight: height }}>
+   604→      <defs>
+   605→        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+   606→          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+   607→          <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.2" />
+   608→        </linearGradient>
+   609→        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+   610→          <path d="M0,0 L0,6 L9,3 z" fill="currentColor" />
+   611→        </marker>
+   612→        <filter id="glow">
+   613→          <feGaussianBlur stdDeviation="2" result="blur" />
+   614→          <feMerge>
+   615→            <feMergeNode in="blur" />
+   616→            <feMergeNode in="SourceGraphic" />
+   617→          </feMerge>
+   618→        </filter>
+   619→      </defs>
+   620→
+   621→      {/* Chain sources */}
+   622→      <text x="60" y="30" className="fill-muted-foreground text-[10px] font-semibold">CHAIN SOURCES (100+)</text>
+   623→      {['EVM', 'SVM', 'Cosmos', 'Move', 'Substrate', 'UTXO'].map((vm, i) => (
+   624→        <g key={vm}>
+   625→          <rect x="20" y={50 + i * 30} width="100" height="22" rx="4" fill="url(#grad1)" stroke="#3b82f6" strokeOpacity="0.4" />
+   626→          <text x="70" y={65 + i * 30} textAnchor="middle" className="fill-foreground text-[10px] font-mono">{vm}</text>
+   627→        </g>
+   628→      ))}
+   629→
+   630→      {/* Rust Indexers */}
+   631→      <g>
+   632→        <rect x="160" y="100" width="120" height="100" rx="8" fill="url(#grad1)" stroke="#3b82f6" strokeOpacity="0.6" filter="url(#glow)" />
+   633→        <text x="220" y="125" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">RUST INDEXERS</text>
+   634→        <text x="220" y="145" textAnchor="middle" className="fill-muted-foreground text-[9px]">16 crates</text>
+   635→        <text x="220" y="160" textAnchor="middle" className="fill-muted-foreground text-[9px]">128 chains</text>
+   636→        <text x="220" y="175" textAnchor="middle" className="fill-muted-foreground text-[9px]">18 VM families</text>
+   637→        <text x="220" y="190" textAnchor="middle" className="fill-green-500 text-[9px] font-mono">LIVE</text>
+   638→      </g>
+   639→
+   640→      {/* Arrow chain -> indexer */}
+   641→      <line x1="120" y1="150" x2="160" y2="150" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   642→
+   643→      {/* BH Primitive */}
+   644→      <g>
+   645→        <rect x="310" y="100" width="120" height="100" rx="8" fill="url(#grad1)" stroke="#8b5cf6" strokeOpacity="0.6" filter="url(#glow)" />
+   646→        <text x="370" y="125" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">BH L0.1</text>
+   647→        <text x="370" y="145" textAnchor="middle" className="fill-muted-foreground text-[9px]">93-byte payload</text>
+   648→        <text x="370" y="160" textAnchor="middle" className="fill-muted-foreground text-[9px]">SHA3-256 dual-strand</text>
+   649→        <text x="370" y="175" textAnchor="middle" className="fill-muted-foreground text-[9px]">XOR invariant</text>
+   650→        <text x="370" y="190" textAnchor="middle" className="fill-green-500 text-[9px] font-mono">0.006ms</text>
+   651→      </g>
+   652→
+   653→      <line x1="280" y1="150" x2="310" y2="150" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   654→
+   655→      {/* Five Planes */}
+   656→      <text x="540" y="30" textAnchor="middle" className="fill-muted-foreground text-[10px] font-semibold">FIVE-PLANE COHERENCE Coherence</text>
+   657→      {[
+   658→        { name: 'Phi Physical', color: '#ef4444', y: 50 },
+   659→        { name: 'M Mental', color: '#f59e0b', y: 95 },
+   660→        { name: 'Sigma Spiritual', color: '#10b981', y: 140 },
+   661→        { name: 'K Conscious', color: '#3b82f6', y: 185 },
+   662→        { name: 'A ANIMA', color: '#8b5cf6', y: 230 },
+   663→      ].map(plane => (
+   664→        <g key={plane.name}>
+   665→          <rect x="470" y={plane.y} width="140" height="32" rx="6" fill={plane.color} fillOpacity="0.15" stroke={plane.color} strokeOpacity="0.5" />
+   666→          <text x="540" y={plane.y + 20} textAnchor="middle" className="fill-foreground text-[10px] font-mono">{plane.name}</text>
+   667→        </g>
+   668→      ))}
+   669→
+   670→      <line x1="430" y1="150" x2="470" y2="150" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   671→
+   672→      {/* Coherence Engine */}
+   673→      <g>
+   674→        <rect x="650" y="80" width="140" height="60" rx="8" fill="url(#grad1)" stroke="#3b82f6" strokeOpacity="0.6" filter="url(#glow)" />
+   675→        <text x="720" y="105" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">COHERENCE Coherence</text>
+   676→        <text x="720" y="125" textAnchor="middle" className="fill-muted-foreground text-[9px]">11 weight profiles</text>
+   677→      </g>
+   678→
+   679→      <line x1="610" y1="150" x2="650" y2="110" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   680→
+   681→      {/* Master Equation Master Signal */}
+   682→      <g>
+   683→        <rect x="810" y="80" width="80" height="60" rx="8" fill="#3b82f6" fillOpacity="0.3" stroke="#3b82f6" filter="url(#glow)" />
+   684→        <text x="850" y="105" textAnchor="middle" className="fill-foreground text-[10px] font-bold">Master Signal</text>
+   685→        <text x="850" y="120" textAnchor="middle" className="fill-muted-foreground text-[8px]">Master Eq.</text>
+   686→        <text x="850" y="132" textAnchor="middle" className="fill-muted-foreground text-[8px]">C-e^M_moat</text>
+   687→      </g>
+   688→
+   689→      <line x1="790" y1="110" x2="810" y2="110" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   690→
+   691→      {/* Signal Factory */}
+   692→      <g>
+   693→        <rect x="650" y="170" width="140" height="60" rx="8" fill="url(#grad1)" stroke="#8b5cf6" strokeOpacity="0.6" filter="url(#glow)" />
+   694→        <text x="720" y="195" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">SIGNAL FACTORY</text>
+   695→        <text x="720" y="215" textAnchor="middle" className="fill-muted-foreground text-[9px]">24 signal types</text>
+   696→      </g>
+   697→
+   698→      <line x1="610" y1="200" x2="650" y2="200" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   699→
+   700→      {/* Relayer */}
+   701→      <g>
+   702→        <rect x="810" y="170" width="80" height="60" rx="8" fill="url(#grad1)" stroke="#10b981" strokeOpacity="0.6" filter="url(#glow)" />
+   703→        <text x="850" y="195" textAnchor="middle" className="fill-foreground text-[10px] font-semibold">RELAYER</text>
+   704→        <text x="850" y="215" textAnchor="middle" className="fill-muted-foreground text-[8px]">KMS-backed</text>
+   705→      </g>
+   706→
+   707→      <line x1="790" y1="200" x2="810" y2="200" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   708→
+   709→      {/* On-chain */}
+   710→      <g>
+   711→        <rect x="650" y="260" width="240" height="60" rx="8" fill="#10b981" fillOpacity="0.2" stroke="#10b981" strokeOpacity="0.6" filter="url(#glow)" />
+   712→        <text x="770" y="285" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">ON-CHAIN (0G + 100+ CHAINS)</text>
+   713→        <text x="770" y="305" textAnchor="middle" className="fill-muted-foreground text-[9px]">TRIONExecutionGate - TRIONOracleV3 - BTCPRoute</text>
+   714→      </g>
+   715→
+   716→      <line x1="850" y1="230" x2="850" y2="260" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   717→
+   718→      {/* Akashic Records (bottom) */}
+   719→      <g>
+   720→        <rect x="160" y="280" width="430" height="80" rx="8" fill="url(#grad1)" stroke="#8b5cf6" strokeOpacity="0.4" />
+   721→        <text x="375" y="305" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">AKASHIC RECORDS (L2)</text>
+   722→        <text x="375" y="325" textAnchor="middle" className="fill-muted-foreground text-[9px]">Append-only BH ledger - FAISS 128-dim - 531K+ vectors - BEO entity resolution</text>
+   723→        <text x="375" y="345" textAnchor="middle" className="fill-green-500 text-[9px] font-mono">TimescaleDB + SQLite fallback</text>
+   724→      </g>
+   725→
+   726→      <line x1="370" y1="200" x2="370" y2="280" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   727→      <line x1="220" y1="200" x2="220" y2="280" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#arrow)" className="text-muted-foreground" />
+   728→
+   729→      {/* Governance row */}
+   730→      <g>
+   731→        <rect x="20" y="380" width="860" height="120" rx="8" fill="url(#grad1)" stroke="#f59e0b" strokeOpacity="0.3" />
+   732→        <text x="450" y="405" textAnchor="middle" className="fill-foreground text-[11px] font-semibold">GOVERNANCE & NOVEL PRIMITIVES (L4-L9)</text>
+   733→
+   734→        {['BIRP', 'BIBL', 'BTCP', 'SBA', 'Gratitude', 'Love F', 'ACP*6', 'Falsifiability*15', 'Slashing*5', 'Adaptive Consensus'].map((g, i) => (
+   735→          <g key={g}>
+   736→            <rect x={40 + i * 85} y="420" width="75" height="22" rx="4" fill="#f59e0b" fillOpacity="0.15" stroke="#f59e0b" strokeOpacity="0.4" />
+   737→            <text x={77 + i * 85} y="435" textAnchor="middle" className="fill-foreground text-[9px] font-mono">{g}</text>
+   738→          </g>
+   739→        ))}
+   740→
+   741→        <text x="450" y="465" textAnchor="middle" className="fill-muted-foreground text-[9px]">
+   742→          AWA Ceremony - Right to Invisibility - Elder Wisdom - Unknown-Unknown Provision - Public Good Charter
+   743→        </text>
+   744→        <text x="450" y="485" textAnchor="middle" className="fill-green-500 text-[9px] font-mono">
+   745→          All systems operational - 472 tests passing
+   746→        </text>
+   747→      </g>
+   748→    </svg>
+   749→  );
+   750→}
+   751→
+   752→// ════════════════════════════════════════════════════════════════════════════
+   753→// PLANE VISUALIZATION - Five-plane coherence chart
+   754→// ════════════════════════════════════════════════════════════════════════════
+   755→
+   756→export function PlaneGauge({
+   757→  label,
+   758→  value,
+   759→  threshold,
+   760→  color,
+   761→  icon,
+   762→}: {
+   763→  label: string;
+   764→  value: number;
+   765→  threshold: number;
+   766→  color: string;
+   767→  icon?: string;
+   768→}) {
+   769→  const pct = Math.max(0, Math.min(1, value));
+   770→  const passes = value >= threshold;
+   771→  const circumference = 2 * Math.PI * 36;
+   772→  const offset = circumference * (1 - pct);
+   773→
+   774→  return (
+   775→    <div className="flex flex-col items-center">
+   776→      <div className="relative w-24 h-24">
+   777→        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
+   778→          <circle cx="40" cy="40" r="36" fill="none" stroke="currentColor" strokeWidth="4" className="text-muted" />
+   779→          <circle
+   780→            cx="40" cy="40" r="36" fill="none" stroke={color} strokeWidth="4"
+   781→            strokeDasharray={circumference}
+   782→            strokeDashoffset={offset}
+   783→            strokeLinecap="round"
+   784→            className="transition-all duration-700"
+   785→          />
+   786→        </svg>
+   787→        <div className="absolute inset-0 flex flex-col items-center justify-center">
+   788→          <div className="text-lg font-bold">{(pct * 100).toFixed(0)}%</div>
+   789→          {icon && <div className="text-xs">{icon}</div>}
+   790→        </div>
+   791→      </div>
+   792→      <div className="text-xs font-semibold mt-2 truncate max-w-[120px] text-center">{label}</div>
+   793→      <div className={`text-xs ${passes ? 'text-green-500' : 'text-red-500'}`}>
+   794→        threshold={threshold.toFixed(2)} {passes ? 'pass' : 'fail'}
+   795→      </div>
+   796→    </div>
+   797→  );
+   798→}
+   799→
+   800→// ════════════════════════════════════════════════════════════════════════════
+   801→// LIVE CLOCK
+   802→// ════════════════════════════════════════════════════════════════════════════
+   803→
+   804→export function LiveClock() {
+   805→  const [now, setNow] = useState(new Date());
+   806→  useEffect(() => {
+   807→    const i = setInterval(() => setNow(new Date()), 1000);
+   808→    return () => clearInterval(i);
+   809→  }, []);
+   810→  return <span className="font-mono text-xs">{now.toLocaleTimeString('en-US', { hour12: false })} UTC</span>;
+   811→}
+   812→

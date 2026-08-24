@@ -1,0 +1,702 @@
+    75→                ]
+    76→                # Cap evictions per sweep to avoid holding the lock too long
+    77→                for k in stale_keys[:2000]:
+    78→                    del _rl_buckets[k]
+    79→                    evicted += 1
+    80→            if evicted:
+    81→                _log.info("rate-limiter cleanup: evicted %d stale IP buckets", evicted)
+    82→        except Exception as e:
+    83→            _log.warning("rate-limiter cleanup error: %s", e)
+    84→
+    85→
+    86→# Start the cleanup thread once at module load (daemon so it dies with the process)
+    87→_rl_cleanup_thread = threading.Thread(
+    88→    target=_rl_cleanup_loop, name="rl-cleanup", daemon=True
+    89→)
+    90→_rl_cleanup_thread.start()
+    91→
+    92→
+    93→@app.before_request
+    94→def _rate_limit():
+    95→    # Allow health probes and static files through without counting
+    96→    path = request.path
+    97→    if path in ("/api/v1/health", "/favicon.ico") or path.startswith("/static/"):
+    98→        return None
+    99→
+   100→    ip  = _get_client_ip()
+   101→    now = time.time()
+   102→
+   103→    with _rl_lock:
+   104→        bucket = _rl_buckets.setdefault(ip, deque())
+   105→        # Evict timestamps outside the current window
+   106→        cutoff = now - _RL_WINDOW
+   107→        while bucket and bucket[0] < cutoff:
+   108→            bucket.popleft()
+   109→
+   110→        if len(bucket) >= _RL_MAX_REQS:
+   111→            retry_after = int(_RL_WINDOW - (now - bucket[0])) + 1
+   112→            _log.warning("Rate limit exceeded: ip=%s requests=%d window=%ds", ip, len(bucket), _RL_WINDOW)
+   113→            from flask import Response
+   114→            return Response(
+   115→                json.dumps({"error": "rate_limit_exceeded",
+   116→                            "message": f"Too many requests — limit is {_RL_MAX_REQS} per {_RL_WINDOW}s",
+   117→                            "retry_after_seconds": retry_after}),
+   118→                status=429,
+   119→                mimetype="application/json",
+   120→                headers={"Retry-After": str(retry_after)},
+   121→            )
+   122→
+   123→        bucket.append(now)
+   124→
+   125→        # Hard cap: if too many unique IPs tracked, evict oldest ones synchronously
+   126→        # (fallback to the background thread for normal operation)
+   127→        if len(_rl_buckets) > _RL_BUCKET_CAP:
+   128→            stale_cutoff = now - _RL_STALE_AFTER
+   129→            stale_keys = [k for k, v in _rl_buckets.items() if not v or v[-1] < stale_cutoff]
+   130→            for k in stale_keys[:1000]:
+   131→                del _rl_buckets[k]
+   132→
+   133→    return None
+   134→# ─────────────────────────────────────────────────────────────────────────────
+   135→
+   136→# ── API key authentication (write/admin operations) ───────────────────────────
+   137→# Set TRION_API_KEY in Replit Secrets to enable.  When the var is absent auth
+   138→# is disabled so read-only public deployments need no config change.
+   139→# All GET/HEAD/OPTIONS requests are always public — oracle data is intentionally
+   140→# world-readable.  POST/PUT/PATCH/DELETE require a valid X-API-Key header.
+   141→_TRION_API_KEY = os.environ.get("TRION_API_KEY", "").strip()
+   142→
+   143→@app.before_request
+   144→def _require_api_key():
+   145→    if not _TRION_API_KEY:
+   146→        return None  # auth disabled — set TRION_API_KEY secret to enable
+   147→
+   148→    if request.method in ("GET", "HEAD", "OPTIONS"):
+   149→        return None  # read-only traffic is always public
+   150→
+   151→    # Exempt the health probe even on non-GET (monitoring tools use POST health checks)
+   152→    if request.path in ("/api/v1/health",):
+   153→        return None
+   154→
+   155→    provided = request.headers.get("X-API-Key", "").strip()
+   156→    if not provided:
+   157→        from flask import Response as _R
+   158→        return _R(
+   159→            json.dumps({"error": "unauthorized",
+   160→                        "message": "X-API-Key header is required for write operations",
+   161→                        "hint": "Pass your TRION_API_KEY value in the X-API-Key request header"}),
+   162→            status=401,
+   163→            mimetype="application/json",
+   164→        )
+   165→    # Constant-time comparison prevents timing attacks
+   166→    if not hmac.compare_digest(provided, _TRION_API_KEY):
+   167→        from flask import Response as _R
+   168→        return _R(
+   169→            json.dumps({"error": "forbidden", "message": "Invalid API key"}),
+   170→            status=403,
+   171→            mimetype="application/json",
+   172→        )
+   173→    return None
+   174→# ─────────────────────────────────────────────────────────────────────────────
+   175→
+   176→# ── Import chain relay (non-fatal if web3 not available) ─────────────────────
+   177→try:
+   178→    from api.blockchain import get_relay
+   179→    _chain_available = True
+   180→except ImportError:
+   181→    _log.warning("blockchain relay not available — on-chain publishing disabled")
+   182→    _chain_available = False
+   183→    def get_relay():
+   184→        return None
+   185→
+   186→# ── Register 0G integration routes ───────────────────────────────────────────
+   187→try:
+   188→    import sys
+   189→    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+   190→    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "zg"))
+   191→    from zg_api_routes import zg_bp
+   192→    app.register_blueprint(zg_bp)
+   193→    _zg_available = True
+   194→    _log.info("0G integration routes registered")
+   195→except Exception as _zg_err:
+   196→    _zg_available = False
+   197→    _log.warning("0G integration routes unavailable: %s", _zg_err)
+   198→
+   199→# ── Register CEX bidirectional integration routes ─────────────────────────────
+   200→try:
+   201→    from api.cex_integration import cex_bp
+   202→    app.register_blueprint(cex_bp)
+   203→    _cex_available = True
+   204→    _log.info("CEX integration routes registered")
+   205→except Exception as _cex_err:
+   206→    _cex_available = False
+   207→    _log.warning("CEX integration routes unavailable: %s", _cex_err)
+   208→
+   209→# ── Register Chainlink AggregatorV3-compatible price feed routes ──────────────
+   210→try:
+   211→    from api.price_feed_routes import price_feed_bp
+   212→    app.register_blueprint(price_feed_bp)
+   213→    _price_feed_available = True
+   214→    _log.info("Price feed routes registered")
+   215→except Exception as _pf_err:
+   216→    _price_feed_available = False
+   217→    _log.warning("Price feed routes unavailable: %s", _pf_err)
+   218→
+   219→# ── Register Protocol-Contract Intelligence routes ────────────────────────────
+   220→try:
+   221→    from api.protocol_routes import protocol_bp
+   222→    app.register_blueprint(protocol_bp)
+   223→    _protocol_available = True
+   224→    _log.info("Protocol intelligence routes registered")
+   225→except Exception as _proto_err:
+   226→    _protocol_available = False
+   227→    _log.warning("Protocol intelligence routes unavailable: %s", _proto_err)
+   228→
+   229→# ── Register Reflexive Self-Verification routes ───────────────────────────────
+   230→try:
+   231→    from api.self_verification_routes import self_verification_bp
+   232→    app.register_blueprint(self_verification_bp)
+   233→    _self_verification_available = True
+   234→    _log.info("Self-verification routes registered")
+   235→except Exception as _self_err:
+   236→    _self_verification_available = False
+   237→    _log.warning("Self-verification routes unavailable: %s", _self_err)
+   238→
+   239→# ── Register Institutional Dashboard routes ──────────────────────────────────
+   240→try:
+   241→    from api.dashboard_routes import dashboard_bp
+   242→    app.register_blueprint(dashboard_bp)
+   243→    _dashboard_available = True
+   244→    _log.info("Institutional dashboard routes registered at /app/*")
+   245→except Exception as _dash_err:
+   246→    _dashboard_available = False
+   247→    _log.warning("Dashboard routes unavailable: %s", _dash_err)
+   248→
+   249→# ── Register BTCP + CONTINUUM routes ─────────────────────────────────────────
+   250→try:
+   251→    from api.btcp_continuum_routes import btcp_bp
+   252→    app.register_blueprint(btcp_bp)
+   253→    _btcp_continuum_available = True
+   254→    _log.info("BTCP + CONTINUUM routes registered")
+   255→
+   256→    # ── Auto-start the real-time BH streamer ──────────────────────────────────
+   257→    # GATED: in production the entrypoint owns exactly ONE streamer process
+   258→    # (scripts/run_bh_streamer.py). Without this gate, every gunicorn worker
+   259→    # spawns its own 78-thread streamer → N_workers × 78 threads flooding a
+   260→    # single-threaded FAISS process (caused total overload in live testing).
+   261→    _streamer_enabled = (
+   262→        os.environ.get("TRION_ENABLE_STREAMER", "0") == "1"
+   263→        and os.environ.get("PYTEST_CURRENT_TEST") is None
+   264→    )
+   265→    if _streamer_enabled:
+   266→        try:
+   267→            from core.realtime.bh_streamer import start_streamer as _start_bh_streamer
+   268→            _start_bh_streamer()
+   269→            _log.info("Real-time BH streamer started (in-process)")
+   270→        except Exception as _streamer_err:
+   271→            _log.warning("BH streamer auto-start failed: %s", _streamer_err)
+   272→    else:
+   273→        _log.info("In-process streamer disabled (TRION_ENABLE_STREAMER=0) — "
+   274→                  "entrypoint owns the dedicated streamer process")
+   275→
+   276→except Exception as _btcp_err:
+   277→    _btcp_continuum_available = False
+   278→    _log.warning("BTCP + CONTINUUM routes unavailable: %s", _btcp_err)
+   279→
+   280→# ── Signal feed ring buffer (thread-safe, last 50 computations) ──────────────
+   281→_feed_lock = threading.Lock()
+   282→_feed_buffer: deque = deque(maxlen=50)
+   283→
+   284→def _feed_push(entry: dict):
+   285→    with _feed_lock:
+   286→        _feed_buffer.appendleft(entry)
+   287→
+   288→@app.after_request
+   289→def add_cors(response):
+   290→    response.headers["Access-Control-Allow-Origin"] = "*"
+   291→    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+   292→    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+   293→    return response
+   294→
+   295→@app.route("/")
+   296→def index():
+   297→    # Unified frontend — single dashboard at /app/
+   298→    from flask import redirect
+   299→    return redirect("/app/")
+   300→
+   301→
+   302→@app.route("/explorer")
+   303→def explorer():
+   304→    from flask import redirect
+   305→    return redirect("/app/")
+   306→
+   307→
+   308→@app.route("/pitch")
+   309→def pitch():
+   310→    from flask import redirect
+   311→    return redirect("/app/")
+   312→
+   313→
+   314→@app.route("/api/v1/zg")
+   315→def zg_stats():
+   316→    """Live stats from TRIONExecutionGate on 0G Mainnet (chain 16661).
+   317→
+   318→    Phase 1.5: Rewritten to use web3.py directly instead of spawning a Node.js
+   319→    subprocess. This eliminates the ethers dependency, removes ~150ms of process
+   320→    spawn overhead, and works in environments where Node.js isn't installed.
+   321→    """
+   322→    MAINNET_GATE = "0xA85B49C73B5710d9ddB1CB5a94c52D0F33c4199b"
+   323→    try:
+   324→        from web3 import Web3
+   325→        w3 = Web3(Web3.HTTPProvider("https://evmrpc.0g.ai", request_kwargs={"timeout": 8}))
+   326→        if not w3.is_connected():
+   327→            raise ConnectionError("0G RPC unreachable")
+   328→
+   329→        # Minimal ABI — view functions only, matches TRIONExecutionGate.sol
+   330→        ABI = [
+   331→            {"inputs": [], "name": "totalSignalsPublished",   "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   332→            {"inputs": [], "name": "totalExecutionsAllowed",  "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   333→            {"inputs": [], "name": "totalExecutionsBlocked",  "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   334→            {"inputs": [], "name": "totalAnomaliesSealed",    "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   335→            {"inputs": [], "name": "beoVectorStorageRoot",    "outputs": [{"type": "string"}],  "stateMutability": "view", "type": "function"},
+   336→            {"inputs": [], "name": "lastStorageSyncBlock",    "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   337→            {"inputs": [], "name": "quorumRequired",          "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+   338→        ]
+   339→        contract = w3.eth.contract(address=Web3.to_checksum_address(MAINNET_GATE), abi=ABI)
+   340→        current_block = w3.eth.block_number
+   341→
+   342→        published     = contract.functions.totalSignalsPublished().call()
+   343→        allowed       = contract.functions.totalExecutionsAllowed().call()
+   344→        blocked       = contract.functions.totalExecutionsBlocked().call()
+   345→        anomalies     = contract.functions.totalAnomaliesSealed().call()
+   346→        storage_root  = contract.functions.beoVectorStorageRoot().call()
+   347→        sync_block    = contract.functions.lastStorageSyncBlock().call()
+   348→        quorum        = contract.functions.quorumRequired().call()
+   349→
+   350→        return jsonify({
+   351→            "ok": True,
+   352→            "published":     published,
+   353→            "allowed":       allowed,
+   354→            "blocked":       blocked,
+   355→            "anomalies":     anomalies,
+   356→            "storage_root":  storage_root,
+   357→            "sync_block":    sync_block,
+   358→            "quorum":        quorum,
+   359→            "current_block": current_block,
+   360→            "gate_address":  MAINNET_GATE,
+   361→            "chain_id":      16661,
+   362→            "network":       "0G Mainnet",
+   363→            "rpc":           "https://evmrpc.0g.ai",
+   364→            "explorer":      "https://chainscan.0g.ai/address/" + MAINNET_GATE,
+   365→            "oracle_v3_galileo":   "0x0471B2BE25c2eBbAe7FAc17383F1692979F0A87C",
+   366→            "liquidity_galileo":   "0x105c7F6c16d2c92FEad10336C2b6A047F999a5A7",
+   367→            "travel_rule_galileo": "0x5e7DBE6cc90d6260be2781dc312812834715EBaB",
+   368→            "escrow_galileo":      "0x388f98831c749D7Acad2046329c9CeC94A8b248d",
+   369→            "timestamp":    int(time.time()),
+   370→        })
+   371→    except Exception as e:
+   372→        return jsonify({
+   373→            "ok": False,
+   374→            "error": str(e),
+   375→            "published": 0, "anomalies": 0, "blocked": 0, "allowed": 0,
+   376→            "storage_root": "",
+   377→            "sync_block": 33317279,
+   378→            "chain_id": 16661,
+   379→            "network": "0G Mainnet",
+   380→            "gate_address": MAINNET_GATE,
+   381→            "validator_registered_block": 33317279,
+   382→            "relayer_funded_block": 33317301,
+   383→            "timestamp": int(time.time()),
+   384→        })
+   385→
+   386→
+   387→@app.route("/api/v1/faiss")
+   388→def faiss_stats():
+   389→    """Live FAISS ANIMA engine stats — merges FAISS service + real-time streamer count."""
+   390→    import urllib.request as _req, json as _json
+   391→    vol = _market_volatility()
+   392→
+   393→    # Start with streamer live data (always available if streamer is running)
+   394→    live_vectors = 0
+   395→    live_entities = 0
+   396→    try:
+   397→        from core.realtime.bh_streamer import get_streamer, get_faiss_accumulator
+   398→        streamer = get_streamer()
+   399→        acc = get_faiss_accumulator()
+   400→        if acc:
+   401→            live_vectors = acc.vector_count
+   402→        if streamer:
+   403→            import sqlite3 as _sql
+   404→            conn = _sql.connect("bh_ledger.db", timeout=2)
+   405→            live_entities = conn.execute("SELECT COUNT(DISTINCT entity_id) FROM bh_ledger").fetchone()[0]
+   406→            conn.close()
+   407→    except Exception:
+   408→        pass
+   409→
+   410→    try:
+   411→        with _req.urlopen("http://127.0.0.1:8000/health", timeout=3) as r:
+   412→            data = _json.loads(r.read())
+   413→        # Merge: use max of FAISS service count and live streamer count
+   414→        data["indexed_vectors"] = max(data.get("indexed_vectors", 0), live_vectors)
+   415→        data["entities_tracked"] = max(data.get("entities_tracked", 0), live_entities)
+   416→        data["dynamic_threshold"] = round(0.55 + 0.37 * vol, 6)
+   417→        data["market_volatility"] = round(vol, 4)
+   418→        data["live_streamer_vectors"] = live_vectors
+   419→        data["timestamp"] = int(time.time())
+   420→        return jsonify(data)
+   421→    except Exception as e:
+   422→        # Fallback: use live streamer count (or static if streamer not running)
+   423→        base_vectors = max(10018, live_vectors)
+   424→        base_entities = max(4489, live_entities)
+   425→        return jsonify({
+   426→            "status": "ok", "faiss_available": True,
+   427→            "indexed_vectors": base_vectors, "entities_tracked": base_entities,
+   428→            "index_type": "IndexIVFPQ", "dynamic_threshold": round(0.55 + 0.37 * vol, 6),
+   429→            "market_volatility": round(vol, 4),
+   430→            "live_streamer_vectors": live_vectors,
+   431→            "streamer_active": live_vectors > 0,
+   432→            "timestamp": int(time.time())
+   433→        })
+   434→
+   435→
+   436→@app.route("/api/v1/chains")
+   437→def chain_status():
+   438→    """Live status of all 100+ indexed chains across 14 VM families."""
+   439→    from api.chains_registry import get_all_chains
+   440→    chains = get_all_chains()
+   441→    live_count = sum(1 for c in chains if c["status"] == "live")
+   442→    vm_families = len(set(c["vm"] for c in chains))
+   443→    return jsonify({"chains": chains, "total": len(chains), "live": live_count, "indexed": len(chains), "vm_families": vm_families, "timestamp": int(time.time())})
+   444→
+   445→
+   446→@app.route("/api/v1/explorer/chains")
+   447→def explorer_chains():
+   448→    """BH Explorer — 100+ chains enriched with BH FAISS stats per chain."""
+   449→    from api.chains_registry import get_enriched_chains
+   450→    chains = get_enriched_chains()
+   451→    live = sum(1 for c in chains if c["status"] == "live")
+   452→    total_bh = sum(c["bh_proofs"] for c in chains)
+   453→    vm_families = len(set(c["vm"] for c in chains))
+   454→    return jsonify({
+   455→        "chains": chains,
+   456→        "total": len(chains),
+   457→        "live": live,
+   458→        "total_bh_proofs": total_bh,
+   459→        "vm_families": vm_families,
+   460→        "timestamp": int(time.time()),
+   461→    })
+   462→
+   463→# ── Behavioral plane computation — hash-seeded + live FAISS enrichment ───────
+   464→# Hash gives stable deterministic base values per entity.
+   465→# FAISS enrichment overwrites Mental and ANIMA with live indexed data
+   466→# when real vectors exist for the entity (non-neutral-prior).
+   467→
+   468→def _entity_seed(eid: str) -> float:
+   469→    # SHA3-256 — matches canonical BH L0.1 spec, Rust trion_common::bh_id(),
+   470→    # and TypeScript entityIdFromAddr() in chains/shared/canonical_bh.ts.
+   471→    # Using SHA-256 here was a bug: it broke cross-language BEO identity consistency.
+   472→    h = hashlib.sha3_256(eid.encode()).digest()
+   473→    return int.from_bytes(h[:4], "big") / 0xFFFFFFFF
+   474→
+   475→# Minimum coherence threshold used in COLD_START SILENCE signals ────────────
+   476→# Mirrors THETA_MIN from src/core/coherence_engine.py (0.55) so COLD_START
+   477→# responses carry a meaningful threshold field without importing the engine.
+   478→THETA_MIN_COLD_START: float = 0.55
+   479→
+   480→# FAISS enrichment cache  ──────────────────────────────────────────────────
+   481→# Phase 2.2: Bounded LRU cache with TTL + thread safety.
+   482→# Replaces the unbounded dict that could grow without limit under sustained
+   483→# traffic. Uses functools.lru_cache with a time-bucketed key to force refresh
+   484→# every _FAISS_PLANE_TTL seconds.
+   485→import threading as _threading
+   486→from functools import lru_cache as _lru_cache
+   487→
+   488→_faiss_lock = _threading.Lock()
+   489→_FAISS_PLANE_TTL = 45  # seconds — also drives the time-bucket key
+   490→_FAISS_CACHE_MAX = 10_000  # bound on cached entries (per TTL bucket)
+   491→
+   492→@_lru_cache(maxsize=_FAISS_CACHE_MAX)
+   493→def _query_faiss_planes_cached(eid: str, ts_bucket: int) -> tuple:
+   494→    """
+   495→    Cached wrapper. ts_bucket changes every _FAISS_PLANE_TTL seconds, forcing
+   496→    a fresh fetch. Returns a JSON-serialisable tuple (None or dict-as-tuple-of-pairs)
+   497→    so lru_cache can hash it.
+   498→    """
+   499→    import urllib.request as _ur
+   500→    try:
+   501→        # ── Mental confidence ──────────────────────────────────────────────
+   502→        with _ur.urlopen(
+   503→            f"http://127.0.0.1:8000/api/v1/mental_confidence/{eid}", timeout=1
+   504→        ) as _r:
+   505→            mental = json.loads(_r.read())
+   506→        if mental.get("status") == "neutral_prior":
+   507→            return None
+   508→        # Only skip when BOTH history is empty AND mental score is exactly the
+   509→        # neutral prior (0.5). A valid archetype_id of -1 just means unclassified
+   510→        # — ANIMA can still provide a meaningful score in that state.
+   511→        _m_val_raw = float(mental.get("mental_m", 0.5))
+   512→        if mental.get("history_window", 0) == 0 and abs(_m_val_raw - 0.5) < 1e-6:
+   513→            return None
+   514→        m_val = float(mental.get("mental_m", 0.5))
+   515→
+   516→        # ── ANIMA score ────────────────────────────────────────────────────
+   517→        with _ur.urlopen(
+   518→            f"http://127.0.0.1:8000/api/v1/anima/{eid}", timeout=1
+   519→        ) as _r:
+   520→            anima_d = json.loads(_r.read())
+   521→        a_val = float(anima_d.get("anima_score", 0.5))
+   522→
+   523→        # ── Depth (physical proxy) ─────────────────────────────────────────
+   524→        with _ur.urlopen(
+   525→            f"http://127.0.0.1:8000/api/v1/depth/{eid}", timeout=1
+   526→        ) as _r:
+   527→            depth_d = json.loads(_r.read())
+   528→        depth = float(depth_d.get("akashic_depth", 0.0))
+   529→        phi_live = min(1.0, 0.40 + 0.55 * depth) if depth > 0 else None
+   530→
+   531→        return ({"m": m_val, "anima": a_val, "phi_live": phi_live,
+   532→                 "akashic_depth": depth}, time.time())
+   533→    except Exception:
+   534→        return (None, time.time())
+   535→
+   536→
+   537→def _query_faiss_planes(eid: str) -> dict | None:
+   538→    """
+   539→    Query the FAISS engine (port 8000) for live plane values.
+   540→    Returns a dict with keys 'm', 'anima', 'phi_live' if real (non-neutral)
+   541→    data exists, otherwise None so the caller falls back to hash values.
+   542→
+   543→    Thread-safe via _faiss_lock; bounded via lru_cache(maxsize=10000).
+   544→    TTL enforced via time-bucketed cache key (refreshes every 45s).
+   545→    """
+   546→    ts_bucket = int(time.time() // _FAISS_PLANE_TTL)
+   547→    with _faiss_lock:
+   548→        cached = _query_faiss_planes_cached(eid, ts_bucket)
+   549→    if cached is None:
+   550→        return None
+   551→    result, _ts = cached
+   552→    return result
+   553→
+   554→
+   555→def _get_sigma_plane(eid: str, akashic_depth: float) -> tuple[float, str]:
+   556→    """
+   557→    Spiritual plane Σ(t) — diversity-weighted BFT validator consensus.
+   558→
+   559→    Resolution order:
+   560→      1. Live validator network (Go P2P mesh on port 6000)
+   561→      2. Local diversity-weighted computation from cached validator signals
+   562→      3. Configured bootstrap baseline (0.25) — honest disclosure
+   563→
+   564→    Returns (sigma_value, source_description)
+   565→    """
+   566→    import urllib.request as _ur
+   567→
+   568→    # ── 1. Try live validator network ────────────────────────────────────────
+   569→    try:
+   570→        with _ur.urlopen("http://127.0.0.1:6000/api/v1/consensus/sigma", timeout=0.5) as _r:
+   571→            data = json.loads(_r.read())
+   572→            if "sigma" in data and isinstance(data["sigma"], (int, float)):
+   573→                return float(data["sigma"]), "live_validator_mesh"
+   574→    except Exception:
+   575→        pass
+   576→
+   577→    # ── 2. Try local computation from validator signals in FAISS ────────────
+   578→    try:
+   579→        with _ur.urlopen(
+   580→            f"http://127.0.0.1:8000/api/v1/spiritual/validators?entity={eid}", timeout=1
+   581→        ) as _r:
+   582→            data = json.loads(_r.read())
+   583→            if data and "validators" in data and len(data["validators"]) >= 3:
+   584→                # Compute diversity-weighted sigma locally
+   585→                import numpy as _np
+   586→                from core.spiritual.sigma_engine import (
+   587→                    compute_sigma, ValidatorSignal,
+   588→                )
+   589→                validators = []
+   590→                for v in data["validators"][:10]:  # max 10 for perf
+   591→                    outputs = _np.array(v.get("model_outputs", [0.5] * 10), dtype=float)
+   592→                    validators.append(ValidatorSignal(
+   593→                        validator_id=v.get("id", "unknown"),
+   594→                        valuation=float(v.get("valuation", 0.5)),
+   595→                        stake=float(v.get("stake", 1000.0)),
+   596→                        model_outputs=outputs,
+   597→                    ))
+   598→                result = compute_sigma(validators)
+   599→                return result["sigma"], "local_dw_bft"
+   600→    except Exception:
+   601→        pass
+   602→
+   603→    # ── 3. Configured bootstrap baseline ────────────────────────────────────
+   604→    # Whitepaper L4.1: Σ at bootstrap = 0.25. Full validator network at mainnet.
+   605→    return 0.25, "bootstrap_0.25"
+   606→
+   607→
+   608→def _get_k_plane(eid: str, akashic_depth: float) -> tuple[float, str]:
+   609→    """
+   610→    Conscious plane K(t) — human annotation network.
+   611→
+   612→    Resolution order:
+   613→      1. Live annotation service
+   614→      2. FAISS-indexed annotations for this entity
+   615→      3. Configured bootstrap baseline (0.10) — honest disclosure
+   616→
+   617→    Returns (k_value, source_description)
+   618→    """
+   619→    import urllib.request as _ur
+   620→
+   621→    # ── 1. Try live annotation service ──────────────────────────────────────
+   622→    try:
+   623→        with _ur.urlopen(
+   624→            f"http://127.0.0.1:8000/api/v1/conscious/annotations/{eid}", timeout=1
+   625→        ) as _r:
+   626→            data = json.loads(_r.read())
+   627→            if "k_score" in data and isinstance(data["k_score"], (int, float)):
+   628→                if not data.get("bootstrap", False):
+   629→                    return float(data["k_score"]), "live_annotations"
+   630→    except Exception:
+   631→        pass
+   632→
+   633→    # ── 2. Try indigenous knowledge / cultural context from FAISS ───────────
+   634→    try:
+   635→        with _ur.urlopen(
+   636→            f"http://127.0.0.1:8000/api/v1/conscious/indigenous/{eid}", timeout=1
+   637→        ) as _r:
+   638→            data = json.loads(_r.read())
+   639→            if data and data.get("k_score", 0) > 0.10:
+   640→                return float(data["k_score"]), "indigenous_knowledge"
+   641→    except Exception:
+   642→        pass
+   643→
+   644→    # ── 3. Configured bootstrap baseline ────────────────────────────────────
+   645→    # Whitepaper L4.2: K at bootstrap = 0.10. Annotation network onboarding at mainnet.
+   646→    return 0.10, "bootstrap_0.10"
+   647→
+   648→
+   649→def _plane_values(eid: str) -> dict:
+   650→    """
+   651→    Return 5-plane behavioral values sourced exclusively from live FAISS data.
+   652→
+   653→    COLD_START enforcement (audit finding — Bootstrap Phase):
+   654→      When FAISS reports no behavioral history for this entity, this function
+   655→      returns a sentinel dict with _cold_start=True.  The caller
+   656→      (_compute_signal) must detect this and emit a typed SILENCE/COLD_START
+   657→      signal rather than computing a coherence score.
+   658→
+   659→      Previously this function seeded phi/m/sigma/k/anima deterministically
+   660→      from the entity's SHA3-256 hash when FAISS returned nothing.  That
+   661→      silently fabricated a behavioral record that does not exist — violating
+   662→      the core guarantee that TRION scores are grounded in observed on-chain
+   663→      activity.  That fallback has been removed.
+   664→
+   665→    Sigma (Σ) and K remain at the neutral bootstrap prior (0.50) because
+   666→    they are consensus/annotation planes that FAISS does not supply directly;
+   667→    they will be overridden once a live validator/annotator network is active.
+   668→    """
+   669→    faiss = _query_faiss_planes(eid)
+   670→    if not faiss:
+   671→        # No behavioral sediment in FAISS — return COLD_START.
+   672→        # Planes with independent infrastructure (Σ, K) still report bootstrap values.
+   673→        # Planes requiring behavioral history (Φ, M, A) report zero.
+   674→        # _cold_start flag tells _compute_signal to emit SILENCE/COLD_START.
+   675→        sigma, sigma_src = _get_sigma_plane(eid, 0.0)
+   676→        k, k_src = _get_k_plane(eid, 0.0)
+   677→        return {
+   678→            "phi": 0.0, "m": 0.0, "sigma": sigma, "k": k, "anima": 0.0,
+   679→            "_faiss_enriched": False, "_cold_start": True,
+   680→            "sigma_source": sigma_src, "k_source": k_src,
+   681→            "akashic_depth": 0.0,
+   682→            "cold_start_reason": (
+   683→                "Insufficient behavioral sediment indexed in FAISS. "
+   684→                "Entity requires observed on-chain activity before coherence "
+   685→                "evaluation can begin."
+   686→            ),
+   687→        }
+   688→
+   689→    phi   = faiss["phi_live"] if faiss["phi_live"] is not None else 0.50
+   690→    m     = faiss["m"]
+   691→    anima = faiss["anima"]
+   692→    depth = faiss.get("akashic_depth", 0.0)
+   693→
+   694→    # ── Spiritual plane Σ(t): diversity-weighted BFT validator consensus ─────
+   695→    # Try live validator consensus first; fall back to configured bootstrap.
+   696→    sigma, sigma_source = _get_sigma_plane(eid, depth)
+   697→
+   698→    # ── Conscious plane K(t): human annotation network ────────────────────────
+   699→    # Try live annotations first; fall back to configured bootstrap.
+   700→    k, k_source = _get_k_plane(eid, depth)
+   701→
+   702→    return {"phi": phi, "m": m, "sigma": sigma, "k": k, "anima": anima,
+   703→            "_faiss_enriched": True, "_cold_start": False,
+   704→            "sigma_source": sigma_source,
+   705→            "k_source": k_source,
+   706→            "akashic_depth": depth}
+   707→
+   708→def _faiss_plane_timestamp(eid: str) -> float | None:
+   709→    """Return the timestamp of the last FAISS cache entry for *eid*, or None."""
+   710→    # Query each TTL bucket — the most recent non-None one is the live entry.
+   711→    # We probe the current bucket and the previous one to cover the TTL boundary.
+   712→    now = int(time.time())
+   713→    cur_bucket = now // _FAISS_PLANE_TTL
+   714→    for bucket in (cur_bucket, cur_bucket - 1):
+   715→        cached = _query_faiss_planes_cached(eid, bucket)
+   716→        if cached is not None:
+   717→            _result, ts = cached
+   718→            return ts
+   719→    return None
+   720→
+   721→
+   722→def _plane_values_staleness_s(eid: str):
+   723→    """Return seconds since last successful FAISS plane fetch for *eid*, or None if never enriched."""
+   724→    ts = _faiss_plane_timestamp(eid)
+   725→    if ts is None:
+   726→        return None
+   727→    return round(time.time() - ts, 1)
+   728→
+   729→
+   730→def _mf_score(eid: str) -> float:
+   731→    h = hashlib.sha256((eid + "mf").encode()).digest()
+   732→    return round(0.05 + 0.30 * (h[0] / 255.0), 4)
+   733→
+   734→def _market_volatility() -> float:
+   735→    t = time.time()
+   736→    base = 0.25 + 0.20 * abs(math.sin(t / 3600))
+   737→    noise = (int(hashlib.md5(str(int(t / 300)).encode()).hexdigest(), 16) % 100) / 1000
+   738→    return round(min(0.95, base + noise), 4)
+   739→
+   740→def _compute_signal(entity_id: str) -> dict:
+   741→    """
+   742→    Compute behavioral coherence signal — full TRIONSignal schema (whitepaper §11).
+   743→
+   744→    Implements all mandatory fields:
+   745→      L3.1  M(t) = 1 - PI_t/PI_baseline  (prediction interval formula)
+   746→      L3.2  OE_factor = corr(signal_pub, behavioral_change)
+   747→      L1.3  TC(t) = 1 - max_i(|t_plane_i - t_ref|)/TTL_min
+   748→      L1.4  TI(sensor) = Calibration · Drift · CrossVerification
+   749→      L5.2  C(t) = α·Φ_adj + β·M_adj + γ·Σ + δ·K + ε·A  (CoherenceEngine)
+   750→      L0.5  M_moat = D·Q·R·X·F·N  (six multiplicative factors)
+   751→      L5.3  T(t) = [C≥Θ] · C(t) · e^(M_moat)  (master equation)
+   752→      L4.3  GK genomic signature (SHA3 dual-strand)
+   753→      L2.4  conf_genesis = 1 - e^(-0.001·D)
+   754→    """
+   755→    import uuid
+   756→    from core.master.coherence import CoherenceEngine, CoherenceInput, AssetProfile
+   757→    from core.physical.temporal_coherence import (
+   758→        compute_temporal_coherence, PlaneTimestamp,
+   759→        compute_transduction_integrity, SensorCalibration,
+   760→    )
+   761→    from core.master.signal_factory import (
+   762→        SignalType, compute_brt, _genomic_signature,
+   763→    )
+   764→
+   765→    now    = time.time()
+   766→    planes = _plane_values(entity_id)
+   767→
+   768→    # ── COLD_START guard ───────────────────────────────────────────────────────
+   769→    # If FAISS has no behavioral history for this entity, emit a typed
+   770→    # SILENCE/COLD_START signal and return immediately.  Never compute or
+   771→    # publish a coherence score when no observed behavioral sediment exists.
+   772→    if planes.get("_cold_start"):
+   773→        return {
+   774→            "entity_id":        entity_id,
+
+[showing lines 75-774 of 10361; use offset=775 with limit to continue reading]

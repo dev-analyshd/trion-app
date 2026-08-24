@@ -1,0 +1,884 @@
+     1→/*!
+     2→ * TRION EVM Behavioral Indexer — L0.1 Per-Transaction BH + Block-Level Vectors
+     3→ * =============================================================================
+     4→ * Covers: ETH Mainnet, ARB Mainnet, BASE Mainnet, OP Mainnet, BNB Mainnet,
+     5→ *         HashKey Mainnet, Mantle Mainnet, Linea Mainnet, Scroll Mainnet,
+     6→ *         Polygon Mainnet, 0G Mainnet, 0G Newton Mainnet,
+     7→ *         Avalanche C-Chain, Fantom, Sonic, zkSync Era, Berachain,
+     8→ *         X Layer, XDC Network, Story Protocol (IP), Blast, Manta Pacific,
+     9→ *         Mode Network, Taiko, Fraxtal, Metis, Celo, Gnosis Chain,
+    10→ *         Moonbeam, Kaia (Klaytn), CORE Chain, Bitlayer, BOB Network,
+    11→ *         Rootstock (RSK), Cronos, Somnia, Pharos, Aurora,
+    12→ *         Harmony ONE, IoTeX, Conflux eSpace
+    13→ *
+    14→ * Two outputs per block:
+    15→ *   1. Block-level 128-dim vector (φ) → POST /index/add_batch   (FAISS indexing)
+    16→ *   2. Per-transaction canonical BH   → POST /index/add_tx_bh_batch (L0.1 ledger)
+    17→ *
+    18→ * Block-level behavioral dimensions (9 Shannon entropy features):
+    19→ *   f1 — Transaction volume entropy    H(value_in_wei bins)
+    20→ *   f2 — Counterparty entropy          H(to_address frequency)
+    21→ *   f3 — Gas price entropy             H(gas_price bins)
+    22→ *   f4 — Contract interaction entropy  H(input_data_length bins)
+    23→ *   f5 — Value flow entropy            H(value > 0 ratio)
+    24→ *   f6 — Sender entropy                H(from_address frequency)
+    25→ *   f7 — ERC-20/DeFi interaction       H(method_selector frequency)
+    26→ *   f8 — Gas usage entropy             H(gas_used bins)
+    27→ *   f9 — MEV pattern entropy           H(miner_tip / base_fee ratio bins)
+    28→ *
+    29→ * Per-transaction BH uses canonical 93-byte payload (whitepaper L0.1 §3.1):
+    30→ *   entity_id(32) || event_type(1) || magnitude_nano(8) || context(8) ||
+    31→ *   timestamp(8)  || chain_id(4)   || block_hash(32)
+    32→ */
+    33→
+    34→use anyhow::Result;
+    35→use serde_json::Value;
+    36→use std::time::{SystemTime, UNIX_EPOCH};
+    37→use tokio::time::{sleep, Duration};
+    38→use tracing::{error, info, warn};
+    39→use trion_common::{
+    40→    bh_id, block_entity_id, build_vector, canonical_bh, classify_event_type, event_type_name,
+    41→    freq_entropy, histogram_entropy,
+    42→    BatchPayload, FaissClient, IndexerState, TxBhBatch, TxBhEntry, VectorEntry, with_retry,
+    43→};
+    44→
+    45→#[derive(Clone, Copy)]
+    46→struct EvmChain {
+    47→    label:    &'static str,
+    48→    chain_id: u64,
+    49→    rpcs:     &'static [&'static str],
+    50→}
+    51→
+    52→const CHAINS: &[EvmChain] = &[
+    53→    // ── Ethereum ecosystem mainnets ───────────────────────────────────────────
+    54→    EvmChain {
+    55→        label: "ETH_MAINNET", chain_id: 1,
+    56→        rpcs: &[
+    57→            "https://ethereum.publicnode.com",
+    58→            "https://cloudflare-eth.com",
+    59→            "https://rpc.ankr.com/eth",
+    60→            "https://eth.llamarpc.com",
+    61→        ],
+    62→    },
+    63→    EvmChain {
+    64→        label: "ARB_MAINNET", chain_id: 42161,
+    65→        rpcs: &[
+    66→            "https://arb1.arbitrum.io/rpc",
+    67→            "https://arbitrum-mainnet.public.blastapi.io",
+    68→            "https://rpc.ankr.com/arbitrum",
+    69→        ],
+    70→    },
+    71→    EvmChain {
+    72→        label: "BASE_MAINNET", chain_id: 8453,
+    73→        rpcs: &[
+    74→            "https://mainnet.base.org",
+    75→            "https://base-mainnet.public.blastapi.io",
+    76→            "https://rpc.ankr.com/base",
+    77→        ],
+    78→    },
+    79→    EvmChain {
+    80→        label: "OP_MAINNET", chain_id: 10,
+    81→        rpcs: &[
+    82→            "https://mainnet.optimism.io",
+    83→            "https://optimism-mainnet.public.blastapi.io",
+    84→            "https://rpc.ankr.com/optimism",
+    85→        ],
+    86→    },
+    87→    EvmChain {
+    88→        label: "POLYGON", chain_id: 137,
+    89→        rpcs: &[
+    90→            "https://polygon-bor-rpc.publicnode.com",
+    91→            "https://1rpc.io/matic",
+    92→            "https://polygon.drpc.org",
+    93→            "https://polygon-rpc.com",
+    94→            "https://rpc.ankr.com/polygon",
+    95→        ],
+    96→    },
+    97→    EvmChain {
+    98→        label: "BNB_MAINNET", chain_id: 56,
+    99→        rpcs: &[
+   100→            "https://bsc-dataseed.binance.org",
+   101→            "https://bsc-dataseed1.defibit.io",
+   102→            "https://bsc-dataseed1.ninicoin.io",
+   103→            "https://bsc-mainnet.public.blastapi.io",
+   104→        ],
+   105→    },
+   106→    EvmChain {
+   107→        label: "MANTLE", chain_id: 5000,
+   108→        rpcs: &["https://rpc.mantle.xyz", "https://mantle-mainnet.public.blastapi.io"],
+   109→    },
+   110→    EvmChain {
+   111→        label: "LINEA", chain_id: 59144,
+   112→        rpcs: &["https://rpc.linea.build", "https://linea-mainnet.public.blastapi.io"],
+   113→    },
+   114→    EvmChain {
+   115→        label: "SCROLL", chain_id: 534352,
+   116→        rpcs: &["https://rpc.scroll.io", "https://scroll-mainnet.public.blastapi.io"],
+   117→    },
+   118→    EvmChain {
+   119→        label: "HASHKEY", chain_id: 177,
+   120→        rpcs: &["https://mainnet.hsk.xyz", "https://hashkey-mainnet-rpc.publicnode.com"],
+   121→    },
+   122→    // ── 0G Networks ───────────────────────────────────────────────────────────
+   123→    EvmChain {
+   124→        label: "ZG_MAINNET", chain_id: 16661,
+   125→        rpcs: &[
+   126→            "https://evmrpc.0g.ai",
+   127→            "https://rpc.0g.ai",
+   128→        ],
+   129→    },
+   130→
+   131→    // ── Avalanche ─────────────────────────────────────────────────────────────
+   132→    EvmChain {
+   133→        label: "AVALANCHE", chain_id: 43114,
+   134→        rpcs: &[
+   135→            "https://api.avax.network/ext/bc/C/rpc",
+   136→            "https://avalanche-c-chain-rpc.publicnode.com",
+   137→            "https://rpc.ankr.com/avalanche",
+   138→            "https://1rpc.io/avax/c",
+   139→        ],
+   140→    },
+   141→
+   142→    // ── Fantom / Sonic ────────────────────────────────────────────────────────
+   143→    EvmChain {
+   144→        label: "FANTOM", chain_id: 250,
+   145→        rpcs: &[
+   146→            "https://rpcapi.fantom.network",
+   147→            "https://fantom-mainnet.public.blastapi.io",
+   148→            "https://rpc.ankr.com/fantom",
+   149→            "https://fantom.drpc.org",
+   150→        ],
+   151→    },
+   152→    EvmChain {
+   153→        label: "SONIC", chain_id: 146,
+   154→        rpcs: &[
+   155→            "https://rpc.soniclabs.com",
+   156→            "https://sonic-mainnet.public.blastapi.io",
+   157→            "https://sonic.drpc.org",
+   158→        ],
+   159→    },
+   160→
+   161→    // ── zkSync Era ────────────────────────────────────────────────────────────
+   162→    EvmChain {
+   163→        label: "ZKSYNC_ERA", chain_id: 324,
+   164→        rpcs: &[
+   165→            "https://mainnet.era.zksync.io",
+   166→            "https://zksync-mainnet.public.blastapi.io",
+   167→            "https://zksync.drpc.org",
+   168→            "https://1rpc.io/zksync2-era",
+   169→        ],
+   170→    },
+   171→
+   172→    // ── Berachain ─────────────────────────────────────────────────────────────
+   173→    EvmChain {
+   174→        label: "BERACHAIN", chain_id: 80094,
+   175→        rpcs: &[
+   176→            "https://rpc.berachain.com",
+   177→            "https://berachain-mainnet.public.blastapi.io",
+   178→            "https://berachain.drpc.org",
+   179→        ],
+   180→    },
+   181→
+   182→    // ── X Layer (OKX L2) ──────────────────────────────────────────────────────
+   183→    EvmChain {
+   184→        label: "XLAYER", chain_id: 196,
+   185→        rpcs: &[
+   186→            "https://rpc.xlayer.tech",
+   187→            "https://xlayerrpc.okx.com",
+   188→            "https://xlayer-mainnet.public.blastapi.io",
+   189→        ],
+   190→    },
+   191→
+   192→    // ── XDC Network ───────────────────────────────────────────────────────────
+   193→    EvmChain {
+   194→        label: "XDC", chain_id: 50,
+   195→        rpcs: &[
+   196→            "https://rpc.xinfin.network",
+   197→            "https://erpc.xinfin.network",
+   198→            "https://rpc1.xinfin.network",
+   199→        ],
+   200→    },
+   201→
+   202→    // ── Story Protocol (IP) ───────────────────────────────────────────────────
+   203→    EvmChain {
+   204→        label: "STORY_IP", chain_id: 1514,
+   205→        rpcs: &[
+   206→            "https://mainnet.storyrpc.io",
+   207→            "https://story-mainnet.public.blastapi.io",
+   208→        ],
+   209→    },
+   210→
+   211→    // ── Blast ─────────────────────────────────────────────────────────────────
+   212→    EvmChain {
+   213→        label: "BLAST", chain_id: 81457,
+   214→        rpcs: &[
+   215→            "https://rpc.blast.io",
+   216→            "https://blast-mainnet.public.blastapi.io",
+   217→            "https://blast.drpc.org",
+   218→            "https://rpc.ankr.com/blast",
+   219→        ],
+   220→    },
+   221→
+   222→    // ── Manta Pacific ─────────────────────────────────────────────────────────
+   223→    EvmChain {
+   224→        label: "MANTA_PACIFIC", chain_id: 169,
+   225→        rpcs: &[
+   226→            "https://pacific-rpc.manta.network/http",
+   227→            "https://manta-pacific-mainnet.public.blastapi.io",
+   228→            "https://manta.drpc.org",
+   229→        ],
+   230→    },
+   231→
+   232→    // ── Mode Network ──────────────────────────────────────────────────────────
+   233→    EvmChain {
+   234→        label: "MODE", chain_id: 34443,
+   235→        rpcs: &[
+   236→            "https://mainnet.mode.network",
+   237→            "https://mode-mainnet.public.blastapi.io",
+   238→            "https://mode.drpc.org",
+   239→        ],
+   240→    },
+   241→
+   242→    // ── Taiko ─────────────────────────────────────────────────────────────────
+   243→    EvmChain {
+   244→        label: "TAIKO", chain_id: 167000,
+   245→        rpcs: &[
+   246→            "https://rpc.mainnet.taiko.xyz",
+   247→            "https://taiko-mainnet.public.blastapi.io",
+   248→            "https://taiko.drpc.org",
+   249→        ],
+   250→    },
+   251→
+   252→    // ── Fraxtal ───────────────────────────────────────────────────────────────
+   253→    EvmChain {
+   254→        label: "FRAXTAL", chain_id: 252,
+   255→        rpcs: &[
+   256→            "https://rpc.frax.com",
+   257→            "https://fraxtal-mainnet.public.blastapi.io",
+   258→        ],
+   259→    },
+   260→
+   261→    // ── Metis ─────────────────────────────────────────────────────────────────
+   262→    EvmChain {
+   263→        label: "METIS", chain_id: 1088,
+   264→        rpcs: &[
+   265→            "https://andromeda.metis.io/?owner=1088",
+   266→            "https://metis-mainnet.public.blastapi.io",
+   267→            "https://metis.drpc.org",
+   268→        ],
+   269→    },
+   270→
+   271→    // ── Celo ──────────────────────────────────────────────────────────────────
+   272→    EvmChain {
+   273→        label: "CELO", chain_id: 42220,
+   274→        rpcs: &[
+   275→            "https://forno.celo.org",
+   276→            "https://celo-mainnet.public.blastapi.io",
+   277→            "https://rpc.ankr.com/celo",
+   278→            "https://1rpc.io/celo",
+   279→        ],
+   280→    },
+   281→
+   282→    // ── Gnosis Chain ──────────────────────────────────────────────────────────
+   283→    EvmChain {
+   284→        label: "GNOSIS", chain_id: 100,
+   285→        rpcs: &[
+   286→            "https://rpc.gnosischain.com",
+   287→            "https://gnosis-mainnet.public.blastapi.io",
+   288→            "https://rpc.ankr.com/gnosis",
+   289→            "https://gnosis.drpc.org",
+   290→        ],
+   291→    },
+   292→
+   293→    // ── Moonbeam ──────────────────────────────────────────────────────────────
+   294→    EvmChain {
+   295→        label: "MOONBEAM", chain_id: 1284,
+   296→        rpcs: &[
+   297→            "https://rpc.api.moonbeam.network",
+   298→            "https://moonbeam-mainnet.public.blastapi.io",
+   299→            "https://moonbeam.drpc.org",
+   300→            "https://rpc.ankr.com/moonbeam",
+   301→        ],
+   302→    },
+   303→
+   304→    // ── Kaia (formerly Klaytn) ────────────────────────────────────────────────
+   305→    EvmChain {
+   306→        label: "KAIA", chain_id: 8217,
+   307→        rpcs: &[
+   308→            "https://public-en.node.kaia.io",
+   309→            "https://klaytn-mainnet-rpc.publicnode.com",
+   310→            "https://klaytn.drpc.org",
+   311→            "https://rpc.ankr.com/klaytn",
+   312→        ],
+   313→    },
+   314→
+   315→    // ── CORE Chain ────────────────────────────────────────────────────────────
+   316→    EvmChain {
+   317→        label: "CORE", chain_id: 1116,
+   318→        rpcs: &[
+   319→            "https://rpc.coredao.org",
+   320→            "https://core-mainnet.public.blastapi.io",
+   321→            "https://1rpc.io/core",
+   322→        ],
+   323→    },
+   324→
+   325→    // ── Bitlayer (BTC L2) ─────────────────────────────────────────────────────
+   326→    EvmChain {
+   327→        label: "BITLAYER", chain_id: 200901,
+   328→        rpcs: &[
+   329→            "https://rpc.bitlayer.org",
+   330→            "https://rpc.bitlayer-rpc.com",
+   331→        ],
+   332→    },
+   333→
+   334→    // ── BOB Network (BTC L2) ─────────────────────────────────────────────────
+   335→    EvmChain {
+   336→        label: "BOB", chain_id: 60808,
+   337→        rpcs: &[
+   338→            "https://rpc.gobob.xyz",
+   339→            "https://bob-mainnet.public.blastapi.io",
+   340→        ],
+   341→    },
+   342→
+   343→    // ── Rootstock (RSK, Bitcoin EVM) ─────────────────────────────────────────
+   344→    EvmChain {
+   345→        label: "ROOTSTOCK", chain_id: 30,
+   346→        rpcs: &[
+   347→            "https://public-node.rsk.co",
+   348→            "https://mycrypto.rsk.co",
+   349→        ],
+   350→    },
+   351→
+   352→    // ── Cronos ───────────────────────────────────────────────────────────────
+   353→    EvmChain {
+   354→        label: "CRONOS", chain_id: 25,
+   355→        rpcs: &[
+   356→            "https://evm.cronos.org",
+   357→            "https://cronos-mainnet.public.blastapi.io",
+   358→            "https://cronos.drpc.org",
+   359→            "https://rpc.vvs.finance",
+   360→        ],
+   361→    },
+   362→
+   363→    // ── Aurora (NEAR EVM) ────────────────────────────────────────────────────
+   364→    EvmChain {
+   365→        label: "AURORA", chain_id: 1313161554,
+   366→        rpcs: &[
+   367→            "https://mainnet.aurora.dev",
+   368→            "https://aurora-mainnet.public.blastapi.io",
+   369→            "https://1rpc.io/aurora",
+   370→        ],
+   371→    },
+   372→
+   373→    // ── Harmony ONE ──────────────────────────────────────────────────────────
+   374→    EvmChain {
+   375→        label: "HARMONY", chain_id: 1666600000,
+   376→        rpcs: &[
+   377→            "https://api.harmony.one",
+   378→            "https://harmony-0-rpc.gateway.pokt.network",
+   379→            "https://harmony.drpc.org",
+   380→        ],
+   381→    },
+   382→
+   383→    // ── IoTeX ─────────────────────────────────────────────────────────────────
+   384→    EvmChain {
+   385→        label: "IOTEX", chain_id: 4689,
+   386→        rpcs: &[
+   387→            "https://babel-api.mainnet.iotex.io",
+   388→            "https://rpc.iotex.io",
+   389→        ],
+   390→    },
+   391→
+   392→    // ── Conflux eSpace ───────────────────────────────────────────────────────
+   393→    EvmChain {
+   394→        label: "CONFLUX", chain_id: 1030,
+   395→        rpcs: &[
+   396→            "https://evm.confluxrpc.com",
+   397→            "https://conflux-espace-public.unifra.io",
+   398→        ],
+   399→    },
+   400→
+   401→    // ── Expansion batch 3: Monad Mainnet, Filecoin, HyperLiquid, Abstract,
+   402→    //    Zora, WEMIX, OKT, Oasis Sapphire, Telos, Kroma, Cyber, Sei EVM,
+   403→    //    Canto, Neon EVM, IOTA EVM ────────────────────────────────────────
+   404→    EvmChain {
+   405→        label: "MONAD_MAINNET", chain_id: 10143,
+   406→        rpcs: &[
+   407→            "https://rpc.monad.xyz",
+   408→            "https://monad.drpc.org",
+   409→            "https://1rpc.io/monad",
+   410→        ],
+   411→    },
+   412→    EvmChain {
+   413→        label: "FILECOIN", chain_id: 314,
+   414→        rpcs: &[
+   415→            "https://api.node.glif.io/rpc/v1",
+   416→            "https://rpc.ankr.com/filecoin",
+   417→        ],
+   418→    },
+   419→    EvmChain {
+   420→        label: "HYPERLIQUID", chain_id: 999,
+   421→        rpcs: &[
+   422→            "https://rpc.hyperliquid.xyz/evm",
+   423→            "https://api.hyperliquid.xyz/evm",
+   424→        ],
+   425→    },
+   426→    EvmChain {
+   427→        label: "ABSTRACT", chain_id: 2741,
+   428→        rpcs: &[
+   429→            "https://api.mainnet.abs.xyz",
+   430→            "https://abstract-mainnet.drpc.org",
+   431→        ],
+   432→    },
+   433→    EvmChain {
+   434→        label: "ZORA", chain_id: 7777777,
+   435→        rpcs: &[
+   436→            "https://rpc.zora.energy",
+   437→            "https://zora.drpc.org",
+   438→        ],
+   439→    },
+   440→    EvmChain {
+   441→        label: "WEMIX", chain_id: 1111,
+   442→        rpcs: &[
+   443→            "https://api.wemix.com",
+   444→            "https://wemix-mainnet.rpc.thirdweb.com",
+   445→        ],
+   446→    },
+   447→    EvmChain {
+   448→        label: "OKT_CHAIN", chain_id: 66,
+   449→        rpcs: &[
+   450→            "https://exchainrpc.okex.org",
+   451→            "https://okt.drpc.org",
+   452→        ],
+   453→    },
+   454→    EvmChain {
+   455→        label: "OASIS_SAPPHIRE", chain_id: 23294,
+   456→        rpcs: &[
+   457→            "https://sapphire.oasis.io",
+   458→            "https://1rpc.io/oasis/sapphire",
+   459→        ],
+   460→    },
+   461→    EvmChain {
+   462→        label: "TELOS", chain_id: 40,
+   463→        rpcs: &[
+   464→            "https://mainnet.telos.net/evm",
+   465→            "https://rpc1.eu.telos.net/evm",
+   466→        ],
+   467→    },
+   468→    EvmChain {
+   469→        label: "KROMA", chain_id: 255,
+   470→        rpcs: &[
+   471→            "https://api.kroma.network",
+   472→            "https://1rpc.io/kroma",
+   473→        ],
+   474→    },
+   475→    EvmChain {
+   476→        label: "CYBER", chain_id: 7560,
+   477→        rpcs: &[
+   478→            "https://rpc.cyber.co",
+   479→            "https://cyber.drpc.org",
+   480→        ],
+   481→    },
+   482→    EvmChain {
+   483→        label: "SEI_EVM", chain_id: 1329,
+   484→        rpcs: &[
+   485→            "https://evm-rpc.sei-apis.com",
+   486→            "https://sei-evm.drpc.org",
+   487→        ],
+   488→    },
+   489→    EvmChain {
+   490→        label: "CANTO", chain_id: 7700,
+   491→        rpcs: &[
+   492→            "https://canto.gravitychain.io",
+   493→            "https://mainnode.plexnode.org:8545",
+   494→        ],
+   495→    },
+   496→    EvmChain {
+   497→        label: "NEON_EVM", chain_id: 245022934,
+   498→        rpcs: &[
+   499→            "https://neon-proxy-mainnet.solana.p2p.org",
+   500→            "https://neon-mainnet.everstake.one",
+   501→        ],
+   502→    },
+   503→    EvmChain {
+   504→        label: "IOTA_EVM", chain_id: 8822,
+   505→        rpcs: &[
+   506→            "https://json-rpc.evm.iotaledger.net",
+   507→            "https://iota-mainnet-evm.public.blastapi.io",
+   508→        ],
+   509→    },
+   510→
+   511→    // ── BOT Chain (AI-agent EVM L1) ──────────────────────────────────────────
+   512→    EvmChain {
+   513→        label: "BOT_CHAIN", chain_id: 677,
+   514→        rpcs: &[
+   515→            "https://rpc.botchain.ai",
+   516→        ],
+   517→    },
+   518→
+   519→    // ── 0G Newton Testnet ─────────────────────────────────────────────────────
+   520→    EvmChain {
+   521→        label: "ZG_NEWTON", chain_id: 16602,
+   522→        rpcs: &[
+   523→            "https://rpc.newton.0g.ai",
+   524→        ],
+   525→    },
+   526→];
+   527→
+   528→// ── RPC helpers ───────────────────────────────────────────────────────────────
+   529→
+   530→async fn eth_rpc(client: &reqwest::Client, rpc: &str, method: &str, params: Value) -> Result<Value> {
+   531→    let body = serde_json::json!({
+   532→        "jsonrpc": "2.0", "id": 1, "method": method, "params": params
+   533→    });
+   534→    let resp = client.post(rpc).json(&body).send().await?;
+   535→    let json: Value = resp.json().await?;
+   536→    if let Some(err) = json.get("error") {
+   537→        anyhow::bail!("RPC error: {}", err);
+   538→    }
+   539→    Ok(json["result"].clone())
+   540→}
+   541→
+   542→fn hex_to_u64(s: &str) -> u64 {
+   543→    let s = s.trim_start_matches("0x");
+   544→    u64::from_str_radix(s, 16).unwrap_or(0)
+   545→}
+   546→
+   547→// ── Block-level feature extraction (9 Shannon entropy dimensions) ─────────────
+   548→
+   549→fn extract_features(block: &Value) -> [f64; 9] {
+   550→    let txs = match block["transactions"].as_array() {
+   551→        Some(a) => a.clone(),
+   552→        None    => return [0.5f64; 9],
+   553→    };
+   554→    if txs.is_empty() {
+   555→        return [0.5f64; 9];
+   556→    }
+   557→
+   558→    let values:     Vec<f64> = txs.iter().map(|t| hex_to_u64(t["value"].as_str().unwrap_or("0x0")) as f64).collect();
+   559→    let gas_prices: Vec<f64> = txs.iter().map(|t| hex_to_u64(t["gasPrice"].as_str().unwrap_or("0x0")) as f64).collect();
+   560→    let input_lens: Vec<f64> = txs.iter().map(|t| t["input"].as_str().unwrap_or("0x").len() as f64).collect();
+   561→    let gas_limits: Vec<f64> = txs.iter().map(|t| hex_to_u64(t["gas"].as_str().unwrap_or("0x0")) as f64).collect();
+   562→    let froms:      Vec<String> = txs.iter().map(|t| t["from"].as_str().unwrap_or("").to_string()).collect();
+   563→    let tos:        Vec<String> = txs.iter().map(|t| t["to"].as_str().unwrap_or("0x0").to_string()).collect();
+   564→    let selectors:  Vec<String> = txs.iter()
+   565→        .map(|t| { let i = t["input"].as_str().unwrap_or("0x"); if i.len() >= 10 { i[..10].to_string() } else { "0x".into() } })
+   566→        .collect();
+   567→    let max_prio:   Vec<f64> = txs.iter().map(|t| hex_to_u64(t["maxPriorityFeePerGas"].as_str().unwrap_or("0x0")) as f64).collect();
+   568→    let base_fee = hex_to_u64(block["baseFeePerGas"].as_str().unwrap_or("0x1")) as f64;
+   569→    let mev_ratios: Vec<f64> = max_prio.iter().map(|&p| (p / base_fee.max(1.0)).min(100.0) / 100.0).collect();
+   570→
+   571→    let f1 = histogram_entropy(&values, 16);
+   572→    let f2 = freq_entropy(&tos);
+   573→    let f3 = histogram_entropy(&gas_prices, 16);
+   574→    let f4 = histogram_entropy(&input_lens, 8);
+   575→    let nonzero_ratio = values.iter().filter(|&&v| v > 0.0).count() as f64 / txs.len() as f64;
+   576→    let f5 = trion_common::entropy::ratio_entropy((nonzero_ratio * txs.len() as f64) as u64, txs.len() as u64);
+   577→    let f6 = freq_entropy(&froms);
+   578→    let f7 = freq_entropy(&selectors);
+   579→    let f8 = histogram_entropy(&gas_limits, 8);
+   580→    let f9 = histogram_entropy(&mev_ratios, 8);
+   581→
+   582→    [f1, f2, f3, f4, f5, f6, f7, f8, f9]
+   583→}
+   584→
+   585→// ── Per-transaction BH generation (whitepaper L0.1 §3.1) ─────────────────────
+   586→
+   587→/// Global 90-day max value tracker for magnitude normalisation.
+   588→/// Thread-local per-process (not persisted — resets on restart, which is fine).
+   589→static MAX_90D_WEI: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+   590→
+   591→fn magnitude_norm(value_wei: u64) -> f64 {
+   592→    // L0.1: magnitude_norm = log10(ETH_value + 1) / log10(max_90d + 1)
+   593→    // ETH_value = value_wei / 1e18 (avoid f64 precision loss by working in gwei)
+   594→    let eth = value_wei as f64 / 1e18;
+   595→    // Update running max (approximate 90-day max with session max)
+   596→    let current_max_raw = MAX_90D_WEI.load(std::sync::atomic::Ordering::Relaxed);
+   597→    if value_wei > current_max_raw {
+   598→        MAX_90D_WEI.store(value_wei, std::sync::atomic::Ordering::Relaxed);
+   599→    }
+   600→    let max_eth = MAX_90D_WEI.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1e18;
+   601→    let denom = (max_eth + 1.0).log10();
+   602→    if denom < 1e-10 { return 0.0; }
+   603→    ((eth + 1.0).log10() / denom).clamp(0.0, 1.0)
+   604→}
+   605→
+   606→/// Build per-transaction BH entries for every transaction in a block.
+   607→/// Returns a TxBhBatch ready to POST to /index/add_tx_bh_batch.
+   608→fn build_tx_bh_batch(
+   609→    block:      &Value,
+   610→    chain:      &EvmChain,
+   611→    timestamp:  u64,
+   612→    block_num:  u64,
+   613→    block_hash: &str,
+   614→) -> TxBhBatch {
+   615→    let txs = match block["transactions"].as_array() {
+   616→        Some(a) => a,
+   617→        None    => return TxBhBatch {
+   618→            chain_id: chain.chain_id, chain_label: chain.label.to_string(),
+   619→            block_num, block_hash: block_hash.to_string(), timestamp, entries: vec![],
+   620→        },
+   621→    };
+   622→
+   623→    let mut entries: Vec<TxBhEntry> = Vec::with_capacity(txs.len());
+   624→
+   625→    for tx in txs {
+   626→        let from_addr = tx["from"].as_str().unwrap_or("0x0000000000000000000000000000000000000000");
+   627→        let to_addr   = tx["to"].as_str().unwrap_or("0x0000000000000000000000000000000000000000");
+   628→        let tx_hash   = tx["hash"].as_str().unwrap_or("0x0000000000000000000000000000000000000000000000000000000000000000");
+   629→        let value_wei = hex_to_u64(tx["value"].as_str().unwrap_or("0x0"));
+   630→        let input     = tx["input"].as_str().unwrap_or("0x");
+   631→
+   632→        // Extract 4-byte method selector (first 8 hex chars after "0x")
+   633→        let selector = if input.len() >= 10 {
+   634→            input[2..10].to_string() // skip "0x"
+   635→        } else {
+   636→            String::new()
+   637→        };
+   638→
+   639→        // Classify event type
+   640→        let et_byte = if input == "0x" || input.is_empty() {
+   641→            // Pure ETH transfer — no contract call
+   642→            0u8 // TRANSFER
+   643→        } else if input != "0x" && selector.is_empty() {
+   644→            11u8 // DEPLOY (contract creation — no to address)
+   645→        } else {
+   646→            classify_event_type(&selector)
+   647→        };
+   648→
+   649→        // Detect MEV: high miner tip relative to base fee
+   650→        let max_prio = hex_to_u64(tx["maxPriorityFeePerGas"].as_str().unwrap_or("0x0"));
+   651→        let base_fee = hex_to_u64(block["baseFeePerGas"].as_str().unwrap_or("0x1"));
+   652→        let mev_ratio = max_prio as f64 / base_fee.max(1) as f64;
+   653→        // If MEV ratio > 5× and it's a swap-adjacent call, flag as MEV_CAPTURE
+   654→        let et_byte = if mev_ratio > 5.0 && (et_byte == 1 || et_byte == 0) {
+   655→            17u8 // MEV_CAPTURE
+   656→        } else {
+   657→            et_byte
+   658→        };
+   659→
+   660→        // magnitude_norm using log10 formula
+   661→        let mag = magnitude_norm(value_wei);
+   662→
+   663→        // entity_id = SHA3-256(normalised from_addr) — 32-byte entity routing key
+   664→        let entity_id_hex = bh_id(from_addr);
+   665→
+   666→        // Compute canonical 93-byte BH
+   667→        let (sense_hex, antisense_hex) = canonical_bh(
+   668→            &entity_id_hex,
+   669→            et_byte,
+   670→            mag,
+   671→            0u64,       // context flags (venue/layer — reserved, 0 for now)
+   672→            timestamp,
+   673→            chain.chain_id,
+   674→            block_hash,
+   675→        );
+   676→
+   677→        entries.push(TxBhEntry {
+   678→            tx_hash:         tx_hash.to_string(),
+   679→            from_addr:       from_addr.to_string(),
+   680→            to_addr:         to_addr.to_string(),
+   681→            event_type:      et_byte,
+   682→            event_type_name: event_type_name(et_byte).to_string(),
+   683→            entity_id:       entity_id_hex,
+   684→            magnitude_norm:  mag,
+   685→            value_wei:       value_wei.to_string(),
+   686→            selector,
+   687→            timestamp,
+   688→            chain_id:        chain.chain_id,
+   689→            chain_label:     chain.label.to_string(),
+   690→            block_num,
+   691→            block_hash:      block_hash.to_string(),
+   692→            sense_hex,
+   693→            antisense_hex,
+   694→        });
+   695→    }
+   696→
+   697→    TxBhBatch {
+   698→        chain_id:    chain.chain_id,
+   699→        chain_label: chain.label.to_string(),
+   700→        block_num,
+   701→        block_hash:  block_hash.to_string(),
+   702→        timestamp,
+   703→        entries,
+   704→    }
+   705→}
+   706→
+   707→// ── Block indexing loop ───────────────────────────────────────────────────────
+   708→
+   709→async fn index_chain(chain: &EvmChain, faiss: &FaissClient, state: &mut IndexerState) -> Result<()> {
+   710→    let client = reqwest::Client::builder()
+   711→        .timeout(Duration::from_secs(12))
+   712→        .build()?;
+   713→
+   714→    let mut rpc_idx = 0usize;
+   715→
+   716→    // ── Try each RPC in rotation for eth_blockNumber ──────────────────────────
+   717→    let mut latest_opt: Option<u64> = None;
+   718→    for (i, rpc) in chain.rpcs.iter().enumerate() {
+   719→        let rpc_str = rpc.to_string();
+   720→        let res = with_retry(chain.label, 2, 800, || {
+   721→            let c = client.clone(); let r = rpc_str.clone();
+   722→            async move {
+   723→                let v = eth_rpc(&c, &r, "eth_blockNumber", serde_json::json!([])).await?;
+   724→                Ok(v.as_str().unwrap_or("0x0").to_string())
+   725→            }
+   726→        }).await;
+   727→        if let Ok(hex) = res {
+   728→            let n = hex_to_u64(&hex);
+   729→            if n > 0 {
+   730→                latest_opt = Some(n);
+   731→                rpc_idx = i;
+   732→                break;
+   733→            }
+   734→        }
+   735→    }
+   736→    let latest = match latest_opt {
+   737→        Some(l) => l,
+   738→        None => return Err(anyhow::anyhow!("[{}] all RPCs failed for eth_blockNumber", chain.label)),
+   739→    };
+   740→
+   741→    let last = state.last_block();
+   742→    let from = if last == 0 { latest.saturating_sub(1) } else { last + 1 };
+   743→    if from > latest { return Ok(()); }
+   744→
+   745→    for block_num in from..=latest {
+   746→        let rpc_str = chain.rpcs[rpc_idx % chain.rpcs.len()].to_string();
+   747→        let block = match with_retry(chain.label, 3, 2000, || {
+   748→            let c = client.clone(); let r = rpc_str.clone();
+   749→            let n = block_num;
+   750→            async move {
+   751→                eth_rpc(&c, &r, "eth_getBlockByNumber",
+   752→                    serde_json::json!([format!("0x{:x}", n), true])).await
+   753→            }
+   754→        }).await {
+   755→            Ok(b) => b,
+   756→            Err(e) => { warn!("[{}] block {} fetch failed: {}", chain.label, block_num, e); rpc_idx += 1; continue; }
+   757→        };
+   758→
+   759→        // Extract block hash and timestamp
+   760→        let block_hash = block["hash"].as_str().unwrap_or("0x0000000000000000000000000000000000000000000000000000000000000000");
+   761→        let timestamp  = hex_to_u64(block["timestamp"].as_str().unwrap_or("0x0"));
+   762→
+   763→        // ── 1. Block-level 128-dim vector (φ computation) ─────────────────────
+   764→        let features  = extract_features(&block);
+   765→        let phi       = features.iter().sum::<f64>() / 9.0;
+   766→        let entity_id = block_entity_id(chain.label, block_num);
+   767→        let block_bh  = bh_id(&entity_id);
+   768→
+   769→        // Dominant event type across this block (for block-level BH metadata)
+   770→        let dominant_et = {
+   771→            let txs = block["transactions"].as_array();
+   772→            let mut counts = [0u32; 20];
+   773→            if let Some(txs) = txs {
+   774→                for tx in txs {
+   775→                    let input = tx["input"].as_str().unwrap_or("0x");
+   776→                    let sel   = if input.len() >= 10 { &input[2..10] } else { "" };
+   777→                    let et    = classify_event_type(sel) as usize;
+   778→                    if et < 20 { counts[et] += 1; }
+   779→                }
+   780→            }
+   781→            counts.iter().enumerate().max_by_key(|&(_, &c)| c).map(|(i, _)| i as u8).unwrap_or(0)
+   782→        };
+   783→
+   784→        // Block-level canonical BH using block entity_id and dominant event type
+   785→        let (block_sense, block_antisense) = canonical_bh(
+   786→            &block_bh,
+   787→            dominant_et,
+   788→            phi,
+   789→            0u64,
+   790→            timestamp,
+   791→            chain.chain_id,
+   792→            block_hash,
+   793→        );
+   794→
+   795→        let vector  = build_vector(&features, &format!("{}:{}", chain.label, block_num));
+   796→
+   797→        let payload = BatchPayload {
+   798→            vectors: vec![VectorEntry {
+   799→                entity_id:      entity_id.clone(),
+   800→                vector,
+   801→                magnitude:      phi,
+   802→                entropy:        phi,
+   803→                timestamp:      SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64(),
+   804→                bh_id:          block_sense.clone(),  // use canonical sense as block BH-ID
+   805→                block_num,
+   806→                chain_id:       chain.chain_id,
+   807→                chain_label:    chain.label.to_string(),
+   808→                vm_type:        "EVM".to_string(),
+   809→                funding_source: None,
+   810→                block_hash_hex: Some(block_hash.to_string()),
+   811→                event_type:     Some(dominant_et),
+   812→                sense_hex:      Some(block_sense),
+   813→                antisense_hex:  Some(block_antisense),
+   814→            }],
+   815→            block_num,
+   816→            block_features: features.to_vec(),
+   817→            block_phi:      phi,
+   818→            chain_id:       chain.chain_id,
+   819→            chain_label:    chain.label.to_string(),
+   820→            vm_type:        "EVM".to_string(),
+   821→        };
+   822→
+   823→        match faiss.add_batch(&payload).await {
+   824→            Ok(added) => info!("[{}] block={} φ={:.4} added={}", chain.label, block_num, phi, added),
+   825→            Err(e)    => warn!("[{}] FAISS ingest failed for block {}: {}", chain.label, block_num, e),
+   826→        }
+   827→
+   828→        // ── 2. Per-transaction canonical BH (whitepaper L0.1 §3.1) ──────────
+   829→        let tx_batch = build_tx_bh_batch(&block, chain, timestamp, block_num, block_hash);
+   830→        let tx_count = tx_batch.entries.len();
+   831→        if tx_count > 0 {
+   832→            match faiss.add_tx_bh_batch(&tx_batch).await {
+   833→                Ok(stored) => info!("[{}] block={} per-tx BHs: {}/{} stored", chain.label, block_num, stored, tx_count),
+   834→                Err(e)     => warn!("[{}] tx BH batch failed for block {}: {}", chain.label, block_num, e),
+   835→            }
+   836→        }
+   837→
+   838→        state.save(block_num).ok();
+   839→    }
+   840→    Ok(())
+   841→}
+   842→
+   843→// ── Main ──────────────────────────────────────────────────────────────────────
+   844→
+   845→#[tokio::main]
+   846→async fn main() -> Result<()> {
+   847→    tracing_subscriber::fmt().with_env_filter("info").init();
+   848→
+   849→    let faiss_url = std::env::var("FAISS_SERVICE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".into());
+   850→    let poll_ms   = std::env::var("POLL_INTERVAL_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(15_000u64);
+   851→
+   852→    info!("TRION EVM Rust Indexer — {} chains (parallel), poll={}ms, faiss={}", CHAINS.len(), poll_ms, faiss_url);
+   853→    info!("L0.1 per-transaction BH: ENABLED — canonical 93-byte payload + dual-strand SHA3");
+   854→
+   855→    // ── Spawn one independent tokio task per chain ────────────────────────────
+   856→    // Each chain runs its own poll loop concurrently — no chain starves another.
+   857→    let mut handles = Vec::new();
+   858→    for chain in CHAINS {
+   859→        let faiss = FaissClient::new(&faiss_url)?;
+   860→        let mut state = IndexerState::new(&format!("evm_{}", chain.label.to_lowercase()));
+   861→        let chain = *chain;
+   862→        let handle = tokio::spawn(async move {
+   863→            loop {
+   864→                if !faiss.is_healthy().await {
+   865→                    warn!("[{}] FAISS not reachable — waiting 5s", chain.label);
+   866→                    sleep(Duration::from_secs(5)).await;
+   867→                    continue;
+   868→                }
+   869→                if let Err(e) = index_chain(&chain, &faiss, &mut state).await {
+   870→                    error!("[{}] indexer error: {}", chain.label, e);
+   871→                }
+   872→                sleep(Duration::from_millis(poll_ms)).await;
+   873→            }
+   874→        });
+   875→        handles.push(handle);
+   876→    }
+   877→
+   878→    // Wait for all tasks (they loop forever — this blocks until process exits)
+   879→    for h in handles {
+   880→        let _ = h.await;
+   881→    }
+   882→    Ok(())
+   883→}
+   884→

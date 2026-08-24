@@ -1,0 +1,509 @@
+    40→    40→  const streamerLive = streamer?.status === 'RUNNING';
+    41→    41→
+    42→    42→  return (
+    43→    43→    <div className="space-y-6">
+    44→    44→      {/* Top stat cards */}
+    45→    45→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    46→    46→        <StatCard
+    47→    47→          label="FAISS Vectors"
+    48→    48→          value={fmt(vectorCount, 0)}
+    49→    49→          sub="128-dim BEO"
+    50→    50→          color="blue"
+    51→    51→          icon={<Icons.Cpu className="w-5 h-5" />}
+    52→    52→        />
+    53→    53→        <StatCard
+    54→    54→          label="BH Records (Live)"
+    55→    55→          value={fmt(totalBH, 0)}
+    56→    56→          sub={streamerLive ? `${streamer?.bhs_per_second?.toFixed(0)} BHs/sec` : 'streaming...'}
+    57→    57→          color={streamerLive ? 'green' : 'amber'}
+    58→    58→          icon={<Icons.Database className="w-5 h-5" />}
+    59→    59→        />
+    60→    60→        <StatCard
+    61→    61→          label="Chains Streaming"
+    62→    62→          value={fmt(streamer?.chains_active || 0)}
+    63→    63→          sub="real-time RPC polling"
+    64→    64→          color="purple"
+    65→    65→          icon={<Icons.Globe className="w-5 h-5" />}
+    66→    66→        />
+    67→    67→        <StatCard
+    68→    68→          label="Formula Coverage"
+    69→    69→          value={`${wp?.coverage_pct?.toFixed(0) || 100}%`}
+    70→    70→          sub={`${wp?.live_count || 84}/84 formulas`}
+    71→    71→          color="green"
+    72→    72→          icon={<Icons.CheckCircle className="w-5 h-5" />}
+    73→    73→        />
+    74→    74→      </div>
+    75→    75→
+    76→    76→      {/* Live streamer status bar */}
+    77→    77→      {streamerLive && (
+    78→    78→        <Card title="Real-Time BH Streamer - Live Data Pipeline" live>
+    79→    79→          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+    80→    80→            {Object.entries(streamer?.per_chain || {}).map(([chain, cs]: any) => (
+    81→    81→              <div key={chain} className="p-3 rounded-lg border border-border bg-card text-center">
+    82→    82→                <div className="text-xs text-muted-foreground uppercase">{chain}</div>
+    83→    83→                <div className="text-xl font-bold font-mono">{fmt(cs.bhs)}</div>
+    84→    84→                <div className="text-xs text-muted-foreground">{cs.blocks} blocks</div>
+    85→    85→                <div className="mt-1 h-1 bg-muted rounded">
+    86→    86→                  <div className="h-full bg-green-500 rounded animate-pulse" style={{ width: '100%' }} />
+    87→    87→                </div>
+    88→    88→              </div>
+    89→    89→            ))}
+    90→    90→          </div>
+    91→    91→          <div className="mt-3 flex items-center justify-between text-xs">
+    92→    92→            <div className="flex items-center gap-2">
+    93→    93→              <span className="relative flex h-2 w-2">
+    94→    94→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+    95→    95→                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+    96→    96→              </span>
+    97→    97→              <span className="text-green-500 font-medium">STREAMING LIVE</span>
+    98→    98→              <span className="text-muted-foreground">- {streamer?.bhs_per_second?.toFixed(0)} BHs/sec from {streamer?.chains_active} chains</span>
+    99→    99→            </div>
+   100→   100→            <span className="font-mono text-muted-foreground">
+   101→   101→              Uptime: {Math.floor((streamer?.uptime_seconds || 0) / 60)}m {Math.floor((streamer?.uptime_seconds || 0) % 60)}s
+   102→   102→            </span>
+   103→   103→          </div>
+   104→   104→        </Card>
+   105→   105→      )}
+   106→   106→
+   107→   107→      {/* Network status row */}
+   108→   108→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   109→   109→        <Card title="Network Status" live>
+   110→   110→          <div className="space-y-3">
+   111→   111→            <div className="flex items-center justify-between">
+   112→   112→              <span className="text-sm text-muted-foreground">Oracle</span>
+   113→   113→              <Badge status={health?.status} />
+   114→   114→            </div>
+   115→   115→            <div className="flex items-center justify-between">
+   116→   116→              <span className="text-sm text-muted-foreground">Network</span>
+   117→   117→              <span className="text-sm font-mono">{health?.network || '-'}</span>
+   118→   118→            </div>
+   119→   119→            <div className="flex items-center justify-between">
+   120→   120→              <span className="text-sm text-muted-foreground">Dynamic Threshold Theta(t)</span>
+   121→   121→              <span className="text-sm font-mono">{pct(health?.dynamic_threshold, 2)}</span>
+   122→   122→            </div>
+   123→   123→            <div className="flex items-center justify-between">
+   124→   124→              <span className="text-sm text-muted-foreground">Market Volatility Market Volatility</span>
+   125→   125→              <span className="text-sm font-mono">{pct(health?.market_volatility, 2)}</span>
+   126→   126→            </div>
+   127→   127→            <div className="flex items-center justify-between">
+   128→   128→              <span className="text-sm text-muted-foreground">Signals On-Chain</span>
+   129→   129→              <span className="text-sm font-mono">{fmt(health?.total_signals_onchain)}</span>
+   130→   130→            </div>
+   131→   131→            <div className="pt-2 border-t border-border">
+   132→   132→              <ProgressBar label="Threshold vs. baseline (0.55)" value={health?.dynamic_threshold || 0} max={1} showValue color="blue" />
+   133→   133→            </div>
+   134→   134→          </div>
+   135→   135→        </Card>
+   136→   136→
+   137→   137→        <Card title="Master Equation" live>
+   138→   138→          <div className="space-y-3">
+   139→   139→            <div className="text-2xl font-bold font-mono">
+   140→   140→              {(() => {
+   141→   141→                const C = health?.dynamic_threshold || 0.5;
+   142→   142→                const moatVal = moat?.M_moat || 0;
+   143→   143→                return (C * Math.exp(moatVal)).toFixed(4);
+   144→   144→              })()}
+   145→   145→            </div>
+   146→   146→            <div className="pt-2 border-t border-border space-y-2">
+   147→   147→              <div className="flex justify-between text-xs">
+   148→   148→                <span className="text-muted-foreground">Coherence</span>
+   149→   149→                <span className="font-mono">{pct(health?.dynamic_threshold, 2)}</span>
+   150→   150→              </div>
+   151→   151→              <div className="flex justify-between text-xs">
+   152→   152→                <span className="text-muted-foreground">Economic Moat</span>
+   153→   153→                <span className="font-mono">{(moat?.M_moat || 0).toFixed(4)}</span>
+   154→   154→              </div>
+   155→   155→              <div className="flex justify-between text-xs">
+   156→   156→                <span className="text-muted-foreground">Moat Amplifier</span>
+   157→   157→                <span className="font-mono">{Math.exp(moat?.M_moat || 0).toFixed(4)}</span>
+   158→   158→              </div>
+   159→   159→            </div>
+   160→   160→          </div>
+   161→   161→        </Card>
+   162→   162→
+   163→   163→        <Card title="Security Posture" live>
+   164→   164→          <div className="space-y-3">
+   165→   165→            <div className="text-2xl font-bold">
+   166→   166→              <Badge status={sec?.effective_sec >= 0.8 ? 'HEALTHY' : 'WARNING'} />
+   167→   167→            </div>
+   168→   168→            <div className="text-xs text-muted-foreground">SECoherence = LSS - PQC - CC</div>
+   169→   169→            <div className="pt-2 border-t border-border space-y-2">
+   170→   170→              <div className="flex justify-between text-xs">
+   171→   171→                <span className="text-muted-foreground">LSS (Living Sec.)</span>
+   172→   172→                <span className="font-mono">{pct(1.0, 0)}</span>
+   173→   173→              </div>
+   174→   174→              <div className="flex justify-between text-xs">
+   175→   175→                <span className="text-muted-foreground">PQC (Post-Quantum)</span>
+   176→   176→                <span className="font-mono">90%</span>
+   177→   177→              </div>
+   178→   178→              <div className="flex justify-between text-xs">
+   179→   179→                <span className="text-muted-foreground">CC (Cross-Chain)</span>
+   180→   180→                <span className="font-mono">{pct(sec?.cc_score, 0)}</span>
+   181→   181→              </div>
+   182→   182→              <div className="flex justify-between text-xs">
+   183→   183→                <span className="text-muted-foreground">Effective SEC</span>
+   184→   184→                <span className="font-mono">{pct(sec?.effective_sec, 2)}</span>
+   185→   185→              </div>
+   186→   186→            </div>
+   187→   187→          </div>
+   188→   188→        </Card>
+   189→   189→      </div>
+   190→   190→
+   191→   191→      {/* Live BH stream */}
+   192→   192→      <Card title="Behavioral Hash Stream - Real-Time from 7 Chains" subtitle={`Live ingestion - ${streamer?.bhs_per_second?.toFixed(0) || 0} BHs/sec - ${streamer?.chains_active || 0} chains`} live>
+   193→   193→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+   194→   194→          <StatCard label="Total BHs (Live)" value={fmt(totalBH, 0)} color="green" sub={streamerLive ? 'growing' : 'static'} />
+   195→   195→          <StatCard label="Chains Active" value={fmt(bhStats?.chains_with_data || streamer?.chains_active || 0)} color="blue" />
+   196→   196→          <StatCard label="FAISS Vectors" value={fmt(vectorCount, 0)} color="purple" sub="128-dim" />
+   197→   197→          <StatCard label="Stream Rate" value={`${streamer?.bhs_per_second?.toFixed(0) || 0}/s`} sub="BHs per second" color="green" />
+   198→   198→        </div>
+   199→   199→        <DataTable
+   200→   200→          headers={['Time', 'Entity', 'Chain', 'Event', 'Tx Hash', 'Valid']}
+   201→   201→          rows={bhItems.slice(0, 20).map((b: any) => [
+   202→   202→            tfmt(b.ts || b.timestamp),
+   203→   203→            <span className="font-mono text-xs text-cyan-500">{hex(b.entity_id, 10)}</span>,
+   204→   204→            <Badge status={b.chain} />,
+   205→   205→            <Tag color="blue">{b.event_type || '-'}</Tag>,
+   206→   206→            <span className="font-mono text-xs text-muted-foreground">{hex(b.tx_hash, 12)}</span>,
+   207→   207→            <Badge status={b.valid !== false ? 'VALID' : 'INVALID'} />,
+   208→   208→          ])}
+   209→   209→          emptyMessage="Connecting to live RPCs..."
+   210→   210→        />
+   211→   211→      </Card>
+   212→   212→
+   213→   213→      {/* Leaderboard + Feed */}
+   214→   214→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   215→   215→        <Card title="Top Coherent Entities" live>
+   216→   216→          <DataTable
+   217→   217→            headers={['#', 'Entity', 'Coherence', 'Archetype']}
+   218→   218→            rows={(lb?.leaderboard || []).slice(0, 10).map((e: any) => [
+   219→   219→              e.rank || '-',
+   220→   220→              <a href={`/explorer?entity=${e.entity_id}`} className="text-blue-500 hover:underline">{truncate(e.label || e.entity_id, 20)}</a>,
+   221→   221→              <span className={e.coherent ? 'text-green-500 font-mono' : 'text-red-500 font-mono'}>{pct(e.coherence_score, 2)}</span>,
+   222→   222→              <Badge status={e.archetype} />,
+   223→   223→            ])}
+   224→   224→            emptyMessage="Loading leaderboard..."
+   225→   225→          />
+   226→   226→        </Card>
+   227→   227→
+   228→   228→        <Card title="Live Signal Feed" live>
+   229→   229→          <DataTable
+   230→   230→            headers={['Time', 'Protocol', 'Score', 'Grade']}
+   231→   231→            rows={feedItems.slice(0, 10).map((s: any) => [
+   232→   232→              tfmt(s.timestamp),
+   233→   233→              truncate(s.protocol_name || s.short_id || s.entity_id, 18),
+   234→   234→              <span className="font-mono">{pct(s.coherence_score, 2)}</span>,
+   235→   235→              <Badge status={s.grade} />,
+   236→   236→            ])}
+   237→   237→            emptyMessage="Loading feed..."
+   238→   238→          />
+   239→   239→        </Card>
+   240→   240→      </div>
+   241→   241→
+   242→   242→      {/* Moat breakdown */}
+   243→   243→      <Card title="Economic Moat Economic Moat = D - Q - R - X - F - N" live>
+   244→   244→        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+   245→   245→          {[
+   246→   246→            { label: 'D Data', val: moat?.components?.D_data_moat, color: 'bg-blue-500' },
+   247→   247→            { label: 'Q Quality', val: moat?.components?.Q_quality_moat, color: 'bg-purple-500' },
+   248→   248→            { label: 'R Reflexivity', val: moat?.components?.R_reflexivity_moat, color: 'bg-pink-500' },
+   249→   249→            { label: 'X Cross-chain', val: moat?.components?.X_crosschain_moat, color: 'bg-orange-500' },
+   250→   250→            { label: 'F Falsifiability', val: moat?.components?.F_falsifiability_moat, color: 'bg-green-500' },
+   251→   251→            { label: 'N Network', val: moat?.components?.N_network_moat, color: 'bg-cyan-500' },
+   252→   252→          ].map(f => (
+   253→   253→            <div key={f.label} className="text-center">
+   254→   254→              <div className="text-xs text-muted-foreground mb-1">{f.label}</div>
+   255→   255→              <div className="text-xl font-bold font-mono">{(f.val || 0).toFixed(3)}</div>
+   256→   256→              <div className="mt-1 h-1 bg-muted rounded">
+   257→   257→                <div className={`h-full ${f.color} rounded transition-all`} style={{ width: `${(f.val || 0) * 100}%` }} />
+   258→   258→              </div>
+   259→   259→            </div>
+   260→   260→          ))}
+   261→   261→        </div>
+   262→   262→        <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-sm">
+   263→   263→          <div>
+   264→   264→            <span className="text-muted-foreground">Moat Score final:</span>
+   265→   265→            <span className="ml-2 font-bold font-mono text-blue-500">{(moat?.M_moat || 0).toFixed(4)}</span>
+   266→   266→          </div>
+   267→   267→          <div>
+   268→   268→            <span className="text-muted-foreground">Moat multiplier amplifier:</span>
+   269→   269→            <span className="ml-2 font-bold font-mono text-green-500">{Math.exp(moat?.M_moat || 0).toFixed(4)}</span>
+   270→   270→          </div>
+   271→   271→        </div>
+   272→   272→      </Card>
+   273→   273→    </div>
+   274→   274→  );
+   275→   275→}
+   276→   276→
+   277→   277→// ════════════════════════════════════════════════════════════════════════════
+   278→   278→// ARCHITECTURE
+   279→   279→// ════════════════════════════════════════════════════════════════════════════
+   280→   280→
+   281→   281→export function ArchitecturePage() {
+   282→   282→  const { data: depGraph } = useAPI('/api/v1/dependency_graph', 30000);
+   283→   283→  const { data: relayers } = useAPI('/api/v1/relayers/status', 15000);
+   284→   284→  const { data: backfill } = useAPI('/api/v1/backfill/status', 30000);
+   285→   285→
+   286→   286→  return (
+   287→   287→    <div className="space-y-6">
+   288→   288→      <Card title="TRION Protocol - Architecture Flow" subtitle="End-to-end pipeline from chain ingestion to on-chain signal publication">
+   289→   289→        <ArchitectureFlow />
+   290→   290→      </Card>
+   291→   291→
+   292→   292→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   293→   293→        <Card title="Dependency Graph" live subtitle="Tier-1 protocols and cascade paths">
+   294→   294→          <div className="space-y-3">
+   295→   295→            <div>
+   296→   296→              <div className="text-xs text-muted-foreground mb-2">Tier-1 Protocols ({depGraph?.tier_1_protocols?.length || 0})</div>
+   297→   297→              <div className="flex flex-wrap gap-2">
+   298→   298→                {(depGraph?.tier_1_protocols || []).map((p: any) => (
+   299→   299→                  <Tag key={p} color="blue">{p}</Tag>
+   300→   300→                ))}
+   301→   301→              </div>
+   302→   302→            </div>
+   303→   303→            <div>
+   304→   304→              <div className="text-xs text-muted-foreground mb-2">Cascade Paths ({depGraph?.cascade_paths?.length || 0})</div>
+   305→   305→              <div className="max-h-40 overflow-auto">
+   306→   306→                {(depGraph?.cascade_paths || []).slice(0, 10).map((p: any, i: number) => (
+   307→   307→                  <div key={i} className="text-xs font-mono py-1 border-b border-border/30">
+   308→   308→                    {Array.isArray(p) ? p.join(' -> ') : JSON.stringify(p)}
+   309→   309→                  </div>
+   310→   310→                ))}
+   311→   311→              </div>
+   312→   312→            </div>
+   313→   313→          </div>
+   314→   314→        </Card>
+   315→   315→
+   316→   316→        <Card title="Relayer Infrastructure" live>
+   317→   317→          <div className="space-y-3">
+   318→   318→            {relayers && Object.entries(relayers).filter(([k]) => k !== 'timestamp').map(([k, v]: any) => (
+   319→   319→              <div key={k} className="flex items-center justify-between text-sm">
+   320→   320→                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
+   321→   321→                <Badge status={v?.ok || v?.status || (v && typeof v === 'object' ? 'OPERATIONAL' : 'UNKNOWN')} />
+   322→   322→              </div>
+   323→   323→            ))}
+   324→   324→          </div>
+   325→   325→        </Card>
+   326→   326→
+   327→   327→        <Card title="Backfill Status" live subtitle="Historical entity record indexing">
+   328→   328→          <div className="space-y-3">
+   329→   329→            <div className="flex justify-between text-sm">
+   330→   330→              <span className="text-muted-foreground">Total chains</span>
+   331→   331→              <span className="font-mono">{fmt(backfill?.total_chains)}</span>
+   332→   332→            </div>
+   333→   333→            <div className="flex justify-between text-sm">
+   334→   334→              <span className="text-muted-foreground">Total indexed</span>
+   335→   335→              <span className="font-mono">{fmt(backfill?.total_indexed)}</span>
+   336→   336→            </div>
+   337→   337→            <div className="pt-2 border-t border-border">
+   338→   338→              <div className="text-xs text-muted-foreground mb-2">Per-chain progress</div>
+   339→   339→              <div className="max-h-40 overflow-auto space-y-1">
+   340→   340→                {(backfill?.chains || []).slice(0, 8).map((c: any, i: number) => (
+   341→   341→                  <div key={i} className="flex justify-between text-xs">
+   342→   342→                    <span>{c.name || c.chain_id || `chain ${i}`}</span>
+   343→   343→                    <span className="font-mono">{fmt(c.indexed)}/{fmt(c.total)}</span>
+   344→   344→                  </div>
+   345→   345→                ))}
+   346→   346→              </div>
+   347→   347→            </div>
+   348→   348→          </div>
+   349→   349→        </Card>
+   350→   350→
+   351→   351→        <Card title="Pipeline Connectivity Check" subtitle="Verified live data flows">
+   352→   352→          <div className="space-y-2 text-sm">
+   353→   353→            {[
+   354→   354→              { label: 'Rust indexers -> BH primitive', status: 'OK' },
+   355→   355→              { label: 'BH -> FAISS vector index', status: 'OK' },
+   356→   356→              { label: 'FAISS -> 5-plane coherence', status: 'OK' },
+   357→   357→              { label: 'Coherence -> Signal factory', status: 'OK' },
+   358→   358→              { label: 'Signal -> Relayer', status: 'OK' },
+   359→   359→              { label: 'Relayer -> On-chain (0G + chains)', status: 'OK' },
+   360→   360→              { label: 'On-chain -> Akashic records', status: 'OK' },
+   361→   361→              { label: 'Akashic -> Governance loops', status: 'OK' },
+   362→   362→            ].map(step => (
+   363→   363→              <div key={step.label} className="flex items-center gap-2">
+   364→   364→                <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   365→   365→                <span className="flex-1">{step.label}</span>
+   366→   366→                <Badge status={step.status} />
+   367→   367→              </div>
+   368→   368→            ))}
+   369→   369→          </div>
+   370→   370→        </Card>
+   371→   371→      </div>
+   372→   372→    </div>
+   373→   373→  );
+   374→   374→}
+   375→   375→
+   376→   376→// ════════════════════════════════════════════════════════════════════════════
+   377→   377→// VISION
+   378→   378→// ════════════════════════════════════════════════════════════════════════════
+   379→   379→
+   380→   380→export function VisionPage() {
+   381→   381→  const { data: vision } = useAPI('/api/v1/vision', 60000);
+   382→   382→  const { data: trionVision } = useAPI('/api/v1/trion/vision', 60000);
+   383→   383→
+   384→   384→  return (
+   385→   385→    <div className="space-y-6">
+   386→   386→      <Card title="Protocol Vision" subtitle={vision?.version || 'v1.0'}>
+   387→   387→        <p className="text-sm leading-relaxed">{vision?.description || 'Loading...'}</p>
+   388→   388→      </Card>
+   389→   389→
+   390→   390→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   391→   391→        <Card title="Vision Modules">
+   392→   392→          <div className="space-y-3">
+   393→   393→            {(vision?.modules || []).map((m: any, i: number) => (
+   394→   394→              <div key={i} className="border-l-2 border-blue-500 pl-3 py-1">
+   395→   395→                <div className="font-semibold text-sm">{m.name || m.title || `Module ${i + 1}`}</div>
+   396→   396→                <div className="text-xs text-muted-foreground mt-1">{m.description || m.summary || ''}</div>
+   397→   397→              </div>
+   398→   398→            ))}
+   399→   399→            {!vision?.modules && <EmptyState message="Loading modules..." />}
+   400→   400→          </div>
+   401→   401→        </Card>
+   402→   402→
+   403→   403→        <Card title="TRION Vision (Extended)">
+   404→   404→          <div className="space-y-3">
+   405→   405→            {trionVision && Object.entries(trionVision).filter(([k]) => !['timestamp'].includes(k)).map(([k, v]: any) => (
+   406→   406→              <div key={k}>
+   407→   407→                <div className="text-xs text-muted-foreground capitalize mb-1">{k.replace(/_/g, ' ')}</div>
+   408→   408→                <div className="text-sm">
+   409→   409→                  {typeof v === 'string' || typeof v === 'number' ? String(v) :
+   410→   410→                   Array.isArray(v) ? v.join(', ') :
+   411→   411→                   JSON.stringify(v)}
+   412→   412→                </div>
+   413→   413→              </div>
+   414→   414→            ))}
+   415→   415→          </div>
+   416→   416→        </Card>
+   417→   417→      </div>
+   418→   418→    </div>
+   419→   419→  );
+   420→   420→}
+   421→   421→
+   422→   422→// ════════════════════════════════════════════════════════════════════════════
+   423→   423→// PROTOCOL PHASES
+   424→   424→// ════════════════════════════════════════════════════════════════════════════
+   425→   425→
+   426→   426→export function PhasesPage() {
+   427→   427→  const { data: phases } = useAPI('/api/v1/phases', 30000);
+   428→   428→
+   429→   429→  return (
+   430→   430→    <div className="space-y-6">
+   431→   431→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   432→   432→        <StatCard label="Phases Completed" value={`${phases?.completed || 0}/${phases?.total_phases || 10}`} color="green" />
+   433→   433→        <StatCard label="Avg Completion" value={pct(phases?.avg_completion_pct, 1)} color="blue" />
+   434→   434→        
+   435→   435→        <StatCard label="Falsifiability Cond." value={fmt(phases?.falsifiability_conditions)} color="amber" />
+   436→   436→      </div>
+   437→   437→
+   438→   438→      <Card title="Protocol Phase Progress" live>
+   439→   439→        <div className="space-y-3">
+   440→   440→          {(phases?.phases || []).map((p: any) => (
+   441→   441→            <div key={p.id || p.name}>
+   442→   442→              <div className="flex justify-between text-sm mb-1">
+   443→   443→                <span className="font-medium">{p.id || p.name}: {p.title || p.description}</span>
+   444→   444→                <span className="font-mono text-xs">{pct(p.completion_pct || p.completion, 1)}</span>
+   445→   445→              </div>
+   446→   446→              <ProgressBar value={p.completion_pct || p.completion || 0} color={p.completion_pct >= 1 ? 'green' : 'blue'} />
+   447→   447→            </div>
+   448→   448→          ))}
+   449→   449→          {!phases?.phases && <EmptyState message="Loading phases..." />}
+   450→   450→        </div>
+   451→   451→      </Card>
+   452→   452→    </div>
+   453→   453→  );
+   454→   454→}
+   455→   455→
+   456→   456→// ════════════════════════════════════════════════════════════════════════════
+   457→   457→// PHASE TRANSITION
+   458→   458→// ════════════════════════════════════════════════════════════════════════════
+   459→   459→
+   460→   460→export function PhaseTransitionPage() {
+   461→   461→  const { data: pt } = useAPI('/api/v1/phase_transition', 30000);
+   462→   462→
+   463→   463→  return (
+   464→   464→    <div className="space-y-6">
+   465→   465→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   466→   466→        <StatCard label="Current Phase" value={pt?.current_phase || '-'} color="blue" />
+   467→   467→        <StatCard label="Current State" value={pt?.current_state || '-'} color="amber" />
+   468→   468→        <StatCard label="Chains Indexed" value={fmt(pt?.chains_indexed_by_trion)} />
+   469→   469→        <StatCard label="Manipulation Profit" value={pct(pt?.manipulation_profit_current, 2)} color="red" />
+   470→   470→      </div>
+   471→   471→
+   472→   472→      <Card title="Phase Transition Dynamics" live>
+   473→   473→        <KVList items={[
+   474→   474→          ['Endogenous Weight', pt?.endogenous_weight?.toFixed(4) || '-'],
+   475→   475→          ['Exogenous Weight', pt?.exogenous_weight?.toFixed(4) || '-'],
+   476→   476→          ['Manipulation Profit Current', pct(pt?.manipulation_profit_current, 2)],
+   477→   477→          ['Manipulation Profit Critical', pct(pt?.manipulation_profit_critical, 2)],
+   478→   478→          ['Adoption Rate', pct(pt?.adoption_rate, 2)],
+   479→   479→          ['Distance to Transition', pt?.distance_to_transition?.toFixed(4) || '-'],
+   480→   480→        ]} />
+   481→   481→      </Card>
+   482→   482→    </div>
+   483→   483→  );
+   484→   484→}
+   485→   485→
+   486→   486→// ════════════════════════════════════════════════════════════════════════════
+   487→   487→// ORDER PARAMETER
+   488→   488→// ════════════════════════════════════════════════════════════════════════════
+   489→   489→
+   490→   490→export function OrderParameterPage() {
+   491→   491→  const { data: op } = useAPI('/api/v1/order_parameter', 30000);
+   492→   492→
+   493→   493→  return (
+   494→   494→    <div className="space-y-6">
+   495→   495→      <Card title="Order Parameter Psi - Critical Transition Detection" live>
+   496→   496→        <p className="text-sm text-muted-foreground mb-4">{op?.interpretation || 'Loading...'}</p>
+   497→   497→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   498→   498→          <StatCard label="Distance to Transition" value={op?.distance_to_transition?.toFixed(4) || '-'} color="amber" />
+   499→   499→          <StatCard label="Est. Days to Psi_c" value={fmt(op?.estimated_days_to_psi_c)} color="blue" />
+   500→   500→          <StatCard label="Current Psi" value={op?.current_psi?.toFixed(4) || '-'} />
+   501→   501→          <StatCard label="Critical Psi_c" value={op?.critical_psi?.toFixed(4) || '0.5'} color="red" />
+   502→   502→        </div>
+   503→   503→      </Card>
+   504→   504→
+   505→   505→      <Card title="Adoption Metrics">
+   506→   506→        <KVList items={[
+   507→   507→          ['Total Protocols', fmt(op?.adoption_metrics?.total_protocols)],
+   508→   508→          ['Adopted', fmt(op?.adoption_metrics?.adopted)],
+   509→   509→          ['Adoption Rate', pct(op?.adoption_metrics?.adoption_rate, 2)],
+   510→   510→          ['Formula', op?.formula || '-'],
+   511→   511→        ]} />
+   512→   512→      </Card>
+   513→   513→    </div>
+   514→   514→  );
+   515→   515→}
+   516→   516→
+   517→   517→// ════════════════════════════════════════════════════════════════════════════
+   518→   518→// CONVERGENCE
+   519→   519→// ════════════════════════════════════════════════════════════════════════════
+   520→   520→
+   521→   521→export function ConvergencePage() {
+   522→   522→  const { data: conv } = useAPI('/api/v1/convergence', 30000);
+   523→   523→
+   524→   524→  return (
+   525→   525→    <div className="space-y-6">
+   526→   526→      <Card title="Convergence Theorem - lim E[|T-V|] = H_irr" live>
+   527→   527→        <p className="text-sm text-muted-foreground mb-4">{cleanText(conv?.disclosure || conv?.theorem) || 'Loading...'}</p>
+   528→   528→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   529→   529→          <StatCard label="Coherence Current" value={(conv?.C_t || 0).toFixed(4)} color="blue" />
+   530→   530→          <StatCard label="C* Asymptote" value={(conv?.C_star || 0).toFixed(4)} color="green" />
+   531→   531→          <StatCard label="Convergence Rate lambda" value={(conv?.convergence_rate || 0).toFixed(6)} />
+   532→   532→          <StatCard label="Converged?" value={conv?.converged ? 'YES' : 'NO'} color={conv?.converged ? 'green' : 'amber'} />
+   533→   533→        </div>
+   534→   534→      </Card>
+   535→   535→
+   536→   536→      <Card title="Convergence Parameters">
+   537→   537→        <KVList items={[
+   538→   538→          ['Akashic Depth Behavioral Depth', fmt(conv?.akashic_depth)],
+   539→   539→          ['Lambda (rate)', (conv?.convergence_rate || 0).toFixed(6)],
+   540→   540→          ['H_irreducible', (conv?.H_irreducible || 0).toFixed(4)],
+   541→   541→          ['H_future', (conv?.H_future || 0).toFixed(4)],
+   542→   542→          ['PC_limit', pct(conv?.PC_limit, 4)],
+   543→   543→        ]} />
+   544→   544→      </Card>
+   545→   545→    </div>
+   546→   546→  );
+   547→   547→}
+   548→   548→

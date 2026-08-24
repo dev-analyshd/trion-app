@@ -1,0 +1,800 @@
+     1→//! TRION CosmWasm — Combined TRION Protocol Contract
+     2→//! =================================================
+     3→//! Implements TRIONOracleV3 + BTCPEscrow + BTCPIntent + BTCPRoute +
+     4→//! TRIONExecutionGate logic in a single CosmWasm contract. This is the
+     5→//! canonical deployment for the 20 CosmWasm VM chains (Neutron, Archway,
+     6→//! Osmosis wasm, Juno, Terra 2, Kujira, Stargaze, Comdex, Crescent,
+     7→//! Persistence, Injective wasm, Migaloo, Celestia wasm, Nolus, Sei wasm,
+     8→//! Loki, Mantra, etc.).
+     9→//!
+    10→//! Mirrors contracts/solidity/{TRIONOracleV3,BTCPEscrow,BTCPIntent,BTCPRoute,
+    11→//! TRIONExecutionGate}.sol + the Move VM equivalents in contracts/move/.
+    12→
+    13→use cosmwasm_std::{
+    14→    entry_point, Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    15→    StdResult, Storage, Uint128,
+    16→};
+    17→// serde_json returns its own error type; wrap into StdError so `?` works.
+    18→fn to_json_bytes<T: serde::Serialize>(v: &T) -> StdResult<Vec<u8>> {
+    19→    serde_json::to_vec(v).map_err(|e| StdError::generic_err(e.to_string()))
+    20→}
+    21→fn from_json_bytes<T: serde::de::DeserializeOwned>(b: &[u8]) -> StdResult<T> {
+    22→    from_json_bytes(b).map_err(|e| StdError::generic_err(e.to_string()))
+    23→}
+    24→
+    25→use crate::state::{
+    26→    BTCPRoute, Escrow, GateState, Intent, Route, Signal,
+    27→    PREFIX_ESCROWS, PREFIX_INTENTS, PREFIX_ROUTES, PREFIX_SIGNALS,
+    28→    STATE_HOLDING, STATE_RELEASED, STATE_REVERTED,
+    29→    STATUS_PENDING, STATUS_ROUTING, STATUS_EXECUTING, STATUS_COMPLETED,
+    30→    STATUS_FAILED, STATUS_EXPIRED, STATUS_RESURRECTED,
+    31→};
+    32→
+    33→// ── Instantiate / Execute / Query message types ──────────────────────────────
+    34→
+    35→#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+    36→pub struct InstantiateMsg {
+    37→    pub owner:        String,
+    38→    pub relayer:      String,
+    39→    pub awa_enforced: bool,
+    40→}
+    41→
+    42→#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+    43→#[serde(rename_all = "snake_case")]
+    44→pub enum ExecuteMsg {
+    45→    // ── Oracle ───────────────────────────────────────────────────────────────
+    46→    PublishSignal {
+    47→        entity_id: Vec<u8>,
+    48→        coherence: u64,
+    49→        threshold: u64,
+    50→        emits:     bool,
+    51→    },
+    52→    PublishBtcpRoute {
+    53→        route_id:     Vec<u8>,
+    54→        anchor_bh:    Vec<u8>,
+    55→        execution_bh: Vec<u8>,
+    56→        coherence:    u64,
+    57→        threshold:    u64,
+    58→    },
+    59→    // ── Escrow ───────────────────────────────────────────────────────────────
+    60→    LockEscrow {
+    61→        escrow_id:      Vec<u8>,
+    62→        route_id:       Vec<u8>,
+    63→        entity_id:      Vec<u8>,
+    64→        destination:    String,
+    65→        min_coherence:  u64,
+    66→        timeout_blocks: u64,
+    67→    },
+    68→    ReleaseEscrow {
+    69→        escrow_id:    Vec<u8>,
+    70→        execution_bh: Vec<u8>,
+    71→        coherence:    u64,
+    72→    },
+    73→    RevertEscrow {
+    74→        escrow_id: Vec<u8>,
+    75→        reason:    u8,
+    76→    },
+    77→    // ── Intent ───────────────────────────────────────────────────────────────
+    78→    RegisterIntent {
+    79→        intent_hash:  Vec<u8>,
+    80→        entity_id:   Vec<u8>,
+    81→        action:       u8,
+    82→        asset_in:     Vec<u8>,
+    83→        asset_out:    Vec<u8>,
+    84→        magnitude:    u64,
+    85→        source_chain: u64,
+    86→        dest_chain:   u64,
+    87→        deadline:     u64,
+    88→        max_gas_usd:  u64,
+    89→        min_nl_score: u16,
+    90→        nonce:        u64,
+    91→    },
+    92→    UpdateIntentStatus {
+    93→        intent_hash: Vec<u8>,
+    94→        new_status:  u8,
+    95→    },
+    96→    // ── Route ─────────────────────────────────────────────────────────────────
+    97→    RegisterRoute {
+    98→        route_id:        Vec<u8>,
+    99→        intent_hash:     Vec<u8>,
+   100→        anchor_bh:       Vec<u8>,
+   101→        anchor_chain:    u64,
+   102→        execution_chain: u64,
+   103→        entity_id:       Vec<u8>,
+   104→        route_type:      u8,
+   105→    },
+   106→    FinalizeRoute {
+   107→        route_id:            Vec<u8>,
+   108→        execution_bh:        Vec<u8>,
+   109→        gas_saved_vs_bridge: u64,
+   110→        beo_continuity:      u64,
+   111→        cc_coherence:        u64,
+   112→    },
+   113→    // ── Execution Gate ─────────────────────────────────────────────────────────
+   114→    SetGateThreshold {
+   115→        gate_id:   Vec<u8>,
+   116→        threshold: u64,
+   117→    },
+   118→    CheckExecution {
+   119→        gate_id:          Vec<u8>,
+   120→        entity_id:        Vec<u8>,
+   121→        phi:              u64,
+   122→        route_threshold:  u64,
+   123→    },
+   124→    // ── Admin ────────────────────────────────────────────────────────────────
+   125→    SetRelayer { new_relayer: String },
+   126→    SetAwaEnforced { enforced: bool },
+   127→}
+   128→
+   129→#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+   130→#[serde(rename_all = "snake_case")]
+   131→pub enum QueryMsg {
+   132→    GetSignal        { entity_id: Vec<u8> },
+   133→    GetBtcpRoute     { route_id:  Vec<u8> },
+   134→    VerifyExecution  { route_id:  Vec<u8> },
+   135→    GetEscrow        { escrow_id: Vec<u8> },
+   136→    GetIntent        { intent_hash: Vec<u8> },
+   137→    GetRoute         { route_id:  Vec<u8> },
+   138→    GetGate          { gate_id:   Vec<u8> },
+   139→    GetOwner         {},
+   140→    GetRelayer       {},
+   141→    AwaEnforced      {},
+   142→}
+   143→
+   144→// ── Storage helpers ───────────────────────────────────────────────────────────
+   145→
+   146→fn write_owner(storage: &mut dyn Storage, addr: &Addr) -> StdResult<()> {
+   147→    storage.set(b"trion::owner", addr.as_bytes());
+   148→    Ok(())
+   149→}
+   150→fn read_owner(storage: &dyn Storage) -> StdResult<Addr> {
+   151→    let bytes = storage.get(b"trion::owner")
+   152→        .ok_or_else(|| StdError::not_found("owner"))?;
+   153→    let s = String::from_utf8(bytes)?;
+   154→    Ok(Addr::unchecked(s))
+   155→}
+   156→fn write_relayer(storage: &mut dyn Storage, addr: &Addr) -> StdResult<()> {
+   157→    storage.set(b"trion::relayer", addr.as_bytes());
+   158→    Ok(())
+   159→}
+   160→fn read_relayer(storage: &dyn Storage) -> StdResult<Addr> {
+   161→    let bytes = storage.get(b"trion::relayer")
+   162→        .ok_or_else(|| StdError::not_found("relayer"))?;
+   163→    let s = String::from_utf8(bytes)?;
+   164→    Ok(Addr::unchecked(s))
+   165→}
+   166→fn write_awa(storage: &mut dyn Storage, enforced: bool) -> StdResult<()> {
+   167→    storage.set(b"trion::awa_enforced", &[if enforced { 1u8 } else { 0u8 }]);
+   168→    Ok(())
+   169→}
+   170→fn read_awa(storage: &dyn Storage) -> bool {
+   171→    storage.get(b"trion::awa_enforced").map(|v| !v.is_empty() && v[0] != 0).unwrap_or(false)
+   172→}
+   173→
+   174→fn key(prefix: &[u8], id: &[u8]) -> Vec<u8> {
+   175→    let mut k = Vec::with_capacity(prefix.len() + id.len());
+   176→    k.extend_from_slice(prefix);
+   177→    k.extend_from_slice(id);
+   178→    k
+   179→}
+   180→
+   181→fn require_owner(deps: &DepsMut, info: &MessageInfo) -> StdResult<()> {
+   182→    let owner = read_owner(deps.storage)?;
+   183→    if info.sender != owner {
+   184→        return Err(StdError::generic_err("TRION: not authorized (owner only)"));
+   185→    }
+   186→    Ok(())
+   187→}
+   188→
+   189→fn require_owner_or_relayer(deps: &DepsMut, info: &MessageInfo) -> StdResult<()> {
+   190→    let owner   = read_owner(deps.storage)?;
+   191→    let relayer = read_relayer(deps.storage)?;
+   192→    if info.sender != owner && info.sender != relayer {
+   193→        return Err(StdError::generic_err("TRION: not authorized (owner/relayer only)"));
+   194→    }
+   195→    Ok(())
+   196→}
+   197→
+   198→// ── Entry points ─────────────────────────────────────────────────────────────
+   199→
+   200→#[entry_point]
+   201→pub fn instantiate(
+   202→    deps:   DepsMut,
+   203→    _env:   Env,
+   204→    _info:  MessageInfo,
+   205→    msg:    InstantiateMsg,
+   206→) -> StdResult<Response> {
+   207→    let owner   = deps.api.addr_validate(&msg.owner)?;
+   208→    let relayer = deps.api.addr_validate(&msg.relayer)?;
+   209→    write_owner(deps.storage, &owner)?;
+   210→    write_relayer(deps.storage, &relayer)?;
+   211→    write_awa(deps.storage, msg.awa_enforced)?;
+   212→    Ok(Response::new()
+   213→        .add_attribute("action",    "instantiate")
+   214→        .add_attribute("owner",     owner)
+   215→        .add_attribute("relayer",   relayer)
+   216→        .add_attribute("awa_enforced", msg.awa_enforced.to_string()))
+   217→}
+   218→
+   219→#[entry_point]
+   220→pub fn execute(
+   221→    deps:  DepsMut,
+   222→    env:   Env,
+   223→    info:  MessageInfo,
+   224→    msg:   ExecuteMsg,
+   225→) -> StdResult<Response> {
+   226→    match msg {
+   227→        // ── Oracle ───────────────────────────────────────────────────────────
+   228→        ExecuteMsg::PublishSignal { entity_id, coherence, threshold, emits } =>
+   229→            execute_publish_signal(deps, env, info, entity_id, coherence, threshold, emits),
+   230→        ExecuteMsg::PublishBtcpRoute { route_id, anchor_bh, execution_bh, coherence, threshold } =>
+   231→            execute_publish_btcp_route(deps, env, info, route_id, anchor_bh, execution_bh, coherence, threshold),
+   232→        // ── Escrow ───────────────────────────────────────────────────────────
+   233→        ExecuteMsg::LockEscrow { escrow_id, route_id, entity_id, destination, min_coherence, timeout_blocks } =>
+   234→            execute_lock_escrow(deps, env, info, escrow_id, route_id, entity_id, destination, min_coherence, timeout_blocks),
+   235→        ExecuteMsg::ReleaseEscrow { escrow_id, execution_bh, coherence } =>
+   236→            execute_release_escrow(deps, env, info, escrow_id, execution_bh, coherence),
+   237→        ExecuteMsg::RevertEscrow { escrow_id, reason } =>
+   238→            execute_revert_escrow(deps, env, info, escrow_id, reason),
+   239→        // ── Intent ───────────────────────────────────────────────────────────
+   240→        ExecuteMsg::RegisterIntent { intent_hash, entity_id, action, asset_in, asset_out, magnitude, source_chain, dest_chain, deadline, max_gas_usd, min_nl_score, nonce } =>
+   241→            execute_register_intent(deps, env, info, intent_hash, entity_id, action, asset_in, asset_out, magnitude, source_chain, dest_chain, deadline, max_gas_usd, min_nl_score, nonce),
+   242→        ExecuteMsg::UpdateIntentStatus { intent_hash, new_status } =>
+   243→            execute_update_intent_status(deps, env, info, intent_hash, new_status),
+   244→        // ── Route ────────────────────────────────────────────────────────────
+   245→        ExecuteMsg::RegisterRoute { route_id, intent_hash, anchor_bh, anchor_chain, execution_chain, entity_id, route_type } =>
+   246→            execute_register_route(deps, env, info, route_id, intent_hash, anchor_bh, anchor_chain, execution_chain, entity_id, route_type),
+   247→        ExecuteMsg::FinalizeRoute { route_id, execution_bh, gas_saved_vs_bridge, beo_continuity, cc_coherence } =>
+   248→            execute_finalize_route(deps, env, info, route_id, execution_bh, gas_saved_vs_bridge, beo_continuity, cc_coherence),
+   249→        // ── Gate ─────────────────────────────────────────────────────────────
+   250→        ExecuteMsg::SetGateThreshold { gate_id, threshold } =>
+   251→            execute_set_gate_threshold(deps, env, info, gate_id, threshold),
+   252→        ExecuteMsg::CheckExecution { gate_id, entity_id, phi, route_threshold } =>
+   253→            execute_check_execution(deps, env, info, gate_id, entity_id, phi, route_threshold),
+   254→        // ── Admin ────────────────────────────────────────────────────────────
+   255→        ExecuteMsg::SetRelayer { new_relayer } => {
+   256→            require_owner(&deps, &info)?;
+   257→            let addr = deps.api.addr_validate(&new_relayer)?;
+   258→            write_relayer(deps.storage, &addr)?;
+   259→            Ok(Response::new().add_attribute("action", "set_relayer").add_attribute("relayer", addr))
+   260→        }
+   261→        ExecuteMsg::SetAwaEnforced { enforced } => {
+   262→            require_owner(&deps, &info)?;
+   263→            write_awa(deps.storage, enforced)?;
+   264→            Ok(Response::new().add_attribute("action", "set_awa_enforced").add_attribute("enforced", enforced.to_string()))
+   265→        }
+   266→    }
+   267→}
+   268→
+   269→// ── Oracle impl ──────────────────────────────────────────────────────────────
+   270→
+   271→fn execute_publish_signal(
+   272→    deps:      DepsMut,
+   273→    env:       Env,
+   274→    info:      MessageInfo,
+   275→    entity_id: Vec<u8>,
+   276→    coherence: u64,
+   277→    threshold: u64,
+   278→    emits:     bool,
+   279→) -> StdResult<Response> {
+   280→    require_owner_or_relayer(&deps, &info)?;
+   281→    if coherence > 1_000_000 || threshold > 1_000_000 {
+   282→        return Err(StdError::generic_err("TRION: invalid coherence/threshold"));
+   283→    }
+   284→    let k = key(PREFIX_SIGNALS, &entity_id);
+   285→    let existing = deps.storage.get(&k);
+   286→    let update_count = existing.as_ref()
+   287→        .and_then(|v| serde_json::from_slice::<Signal>(v).ok())
+   288→        .map(|s: Signal| s.update_count + 1)
+   289→        .unwrap_or(1);
+   290→    let sig = Signal {
+   291→        entity_id: entity_id.clone(),
+   292→        coherence,
+   293→        threshold,
+   294→        emits_signal: emits,
+   295→        timestamp: env.block.time.seconds(),
+   296→        update_count,
+   297→    };
+   298→    deps.storage.set(&k, &to_json_bytes(&sig)?);
+   299→    Ok(Response::new()
+   300→        .add_attribute("action", "publish_signal")
+   301→        .add_attribute("coherence", coherence.to_string())
+   302→        .add_attribute("threshold", threshold.to_string())
+   303→        .add_attribute("emits", emits.to_string()))
+   304→}
+   305→
+   306→fn execute_publish_btcp_route(
+   307→    deps:        DepsMut,
+   308→    env:         Env,
+   309→    info:        MessageInfo,
+   310→    route_id:    Vec<u8>,
+   311→    anchor_bh:   Vec<u8>,
+   312→    execution_bh:Vec<u8>,
+   313→    coherence:   u64,
+   314→    threshold:   u64,
+   315→) -> StdResult<Response> {
+   316→    require_owner_or_relayer(&deps, &info)?;
+   317→    if coherence > 1_000_000 || threshold > 1_000_000 {
+   318→        return Err(StdError::generic_err("TRION: invalid score"));
+   319→    }
+   320→    let k = key(PREFIX_SIGNALS, &route_id);  // BTCP routes share the signals namespace
+   321→    if deps.storage.get(&k).is_some() {
+   322→        return Err(StdError::generic_err("TRION: route exists"));
+   323→    }
+   324→    let route = BTCPRoute {
+   325→        route_id:     route_id.clone(),
+   326→        anchor_bh,
+   327→        execution_bh,
+   328→        coherence,
+   329→        threshold,
+   330→        is_safe: coherence >= threshold,
+   331→        timestamp: env.block.time.seconds(),
+   332→    };
+   333→    deps.storage.set(&k, &to_json_bytes(&route)?);
+   334→    Ok(Response::new()
+   335→        .add_attribute("action", "publish_btcp_route")
+   336→        .add_attribute("is_safe", (coherence >= threshold).to_string()))
+   337→}
+   338→
+   339→// ── Escrow impl ──────────────────────────────────────────────────────────────
+   340→
+   341→fn execute_lock_escrow(
+   342→    deps:          DepsMut,
+   343→    env:           Env,
+   344→    info:          MessageInfo,
+   345→    escrow_id:     Vec<u8>,
+   346→    route_id:      Vec<u8>,
+   347→    entity_id:     Vec<u8>,
+   348→    destination:   String,
+   349→    min_coherence: u64,
+   350→    timeout_blocks:u64,
+   351→) -> StdResult<Response> {
+   352→    require_owner_or_relayer(&deps, &info)?;
+   353→    if info.funds.is_empty() {
+   354→        return Err(StdError::generic_err("TRION: zero amount"));
+   355→    }
+   356→    if min_coherence > 1_000_000 {
+   357→        return Err(StdError::generic_err("TRION: invalid coherence"));
+   358→    }
+   359→    if timeout_blocks == 0 {
+   360→        return Err(StdError::generic_err("TRION: zero timeout"));
+   361→    }
+   362→    let dest_addr = deps.api.addr_validate(&destination)?;
+   363→
+   364→    let k = key(PREFIX_ESCROWS, &escrow_id);
+   365→    if deps.storage.get(&k).is_some() {
+   366→        return Err(StdError::generic_err("TRION: escrow exists"));
+   367→    }
+   368→    let amount_u128: u128 = info.funds.iter()
+   369→        .map(|c| c.amount.u128())
+   370→        .sum::<u128>().min(u128::MAX);
+   371→    // Capture the ACTUAL denom(s) locked — release/revert pay back in the
+   372→    // same denom. Multiple denoms: join with '+' (release splits them back
+   373→    // proportionally by amount); single-denom (the normal BTCP case) stores
+   374→    // the denom directly.
+   375→    let denom: String = if info.funds.len() == 1 {
+   376→        info.funds[0].denom.clone()
+   377→    } else {
+   378→        info.funds.iter().map(|c| c.denom.clone()).collect::<Vec<_>>().join("+")
+   379→    };
+   380→
+   381→    let esc = Escrow {
+   382→        escrow_id:      escrow_id.clone(),
+   383→        route_id,
+   384→        entity_id,
+   385→        destination:    dest_addr,
+   386→        amount:         amount_u128,
+   387→        denom,
+   388→        min_coherence,
+   389→        lock_height:    env.block.height,
+   390→        timeout_blocks,
+   391→        state:          STATE_HOLDING,
+   392→        revert_reason:  0,
+   393→        settled_at:     0,
+   394→        reverted_at:    0,
+   395→        locked_by:      info.sender.clone(),
+   396→    };
+   397→    deps.storage.set(&k, &to_json_bytes(&esc)?);
+   398→
+   399→    Ok(Response::new()
+   400→        .add_attribute("action", "lock_escrow")
+   401→        .add_attribute("amount", amount_u128.to_string()))
+   402→}
+   403→
+   404→fn execute_release_escrow(
+   405→    deps:        DepsMut,
+   406→    env:         Env,
+   407→    info:        MessageInfo,
+   408→    escrow_id:   Vec<u8>,
+   409→    execution_bh:Vec<u8>,
+   410→    coherence:   u64,
+   411→) -> StdResult<Response> {
+   412→    require_owner_or_relayer(&deps, &info)?;
+   413→    let k = key(PREFIX_ESCROWS, &escrow_id);
+   414→    let mut esc: Escrow = from_json_bytes(
+   415→        &deps.storage.get(&k).ok_or_else(|| StdError::generic_err("TRION: escrow not found"))?
+   416→    )?;
+   417→    if esc.state != STATE_HOLDING {
+   418→        return Err(StdError::generic_err("TRION: not holding"));
+   419→    }
+   420→    if env.block.height > esc.lock_height + esc.timeout_blocks {
+   421→        return Err(StdError::generic_err("TRION: expired"));
+   422→    }
+   423→    if coherence < esc.min_coherence {
+   424→        return Err(StdError::generic_err("TRION: coherence insufficient"));
+   425→    }
+   426→    esc.state       = STATE_RELEASED;
+   427→    esc.settled_at  = env.block.time.seconds();
+   428→    deps.storage.set(&k, &to_json_bytes(&esc)?);
+   429→
+   430→    // Send the locked funds to the destination in the SAME denom(s) that
+   431→    // were locked (was hardcoded "uatom" — broke Juno/Terra/etc.)
+   432→    let coins: Vec<Coin> = esc
+   433→        .denom
+   434→        .split('+')
+   435→        .map(|d| Coin { denom: d.to_string(), amount: Uint128::new(esc.amount) })
+   436→        .collect();
+   437→    Ok(Response::new()
+   438→        .add_message(BankMsg::Send { to_address: esc.destination.to_string(), amount: coins })
+   439→        .add_attribute("action", "release_escrow")
+   440→        .add_attribute("execution_bh_len", execution_bh.len().to_string()))
+   441→}
+   442→
+   443→fn execute_revert_escrow(
+   444→    deps:      DepsMut,
+   445→    env:       Env,
+   446→    info:      MessageInfo,
+   447→    escrow_id: Vec<u8>,
+   448→    reason:    u8,
+   449→) -> StdResult<Response> {
+   450→    let k = key(PREFIX_ESCROWS, &escrow_id);
+   451→    let mut esc: Escrow = from_json_bytes(
+   452→        &deps.storage.get(&k).ok_or_else(|| StdError::generic_err("TRION: escrow not found"))?
+   453→    )?;
+   454→    if esc.state != STATE_HOLDING {
+   455→        return Err(StdError::generic_err("TRION: not holding"));
+   456→    }
+   457→    let is_timeout = env.block.height > esc.lock_height + esc.timeout_blocks;
+   458→    if !is_timeout {
+   459→        require_owner_or_relayer(&deps, &info)?;
+   460→        if reason == 0 {
+   461→            return Err(StdError::generic_err("TRION: not timeout"));
+   462→        }
+   463→    }
+   464→    esc.state         = STATE_REVERTED;
+   465→    esc.revert_reason = reason;
+   466→    esc.reverted_at   = env.block.time.seconds();
+   467→    deps.storage.set(&k, &to_json_bytes(&esc)?);
+   468→
+   469→    // Return funds to the locker in the SAME denom(s) that were locked
+   470→    let coins: Vec<Coin> = esc
+   471→        .denom
+   472→        .split('+')
+   473→        .map(|d| Coin { denom: d.to_string(), amount: Uint128::new(esc.amount) })
+   474→        .collect();
+   475→    Ok(Response::new()
+   476→        .add_message(BankMsg::Send { to_address: esc.locked_by.to_string(), amount: coins })
+   477→        .add_attribute("action", "revert_escrow")
+   478→        .add_attribute("reason", reason.to_string()))
+   479→}
+   480→
+   481→// ── Intent impl ───────────────────────────────────────────────────────────────
+   482→
+   483→fn execute_register_intent(
+   484→    deps:         DepsMut,
+   485→    env:          Env,
+   486→    info:         MessageInfo,
+   487→    intent_hash:  Vec<u8>,
+   488→    entity_id:    Vec<u8>,
+   489→    action:       u8,
+   490→    asset_in:     Vec<u8>,
+   491→    asset_out:    Vec<u8>,
+   492→    magnitude:    u64,
+   493→    source_chain: u64,
+   494→    dest_chain:   u64,
+   495→    deadline:     u64,
+   496→    max_gas_usd:  u64,
+   497→    min_nl_score: u16,
+   498→    nonce:        u64,
+   499→) -> StdResult<Response> {
+   500→    require_owner_or_relayer(&deps, &info)?;
+   501→    if action > 4 {
+   502→        return Err(StdError::generic_err("TRION: invalid action"));
+   503→    }
+   504→    if magnitude == 0 {
+   505→        return Err(StdError::generic_err("TRION: zero magnitude"));
+   506→    }
+   507→    let k = key(PREFIX_INTENTS, &intent_hash);
+   508→    if deps.storage.get(&k).is_some() {
+   509→        return Err(StdError::generic_err("TRION: intent exists"));
+   510→    }
+   511→    if deadline <= env.block.time.seconds() {
+   512→        return Err(StdError::generic_err("TRION: deadline past"));
+   513→    }
+   514→    let intent = Intent {
+   515→        intent_hash,
+   516→        entity_id,
+   517→        action,
+   518→        asset_in,
+   519→        asset_out,
+   520→        magnitude,
+   521→        source_chain,
+   522→        dest_chain,
+   523→        deadline,
+   524→        max_gas_usd,
+   525→        min_nl_score,
+   526→        nonce,
+   527→        status:     STATUS_PENDING,
+   528→        created_at: env.block.time.seconds(),
+   529→        submitter:  info.sender.clone(),
+   530→    };
+   531→    deps.storage.set(&k, &to_json_bytes(&intent)?);
+   532→    Ok(Response::new().add_attribute("action", "register_intent"))
+   533→}
+   534→
+   535→fn execute_update_intent_status(
+   536→    deps:        DepsMut,
+   537→    _env:        Env,
+   538→    info:        MessageInfo,
+   539→    intent_hash: Vec<u8>,
+   540→    new_status:  u8,
+   541→) -> StdResult<Response> {
+   542→    require_owner_or_relayer(&deps, &info)?;
+   543→    let k = key(PREFIX_INTENTS, &intent_hash);
+   544→    let mut it: Intent = from_json_bytes(
+   545→        &deps.storage.get(&k).ok_or_else(|| StdError::generic_err("TRION: intent not found"))?
+   546→    )?;
+   547→    if !valid_transition(it.status, new_status) {
+   548→        return Err(StdError::generic_err("TRION: invalid transition"));
+   549→    }
+   550→    it.status = new_status;
+   551→    deps.storage.set(&k, &to_json_bytes(&it)?);
+   552→    Ok(Response::new()
+   553→        .add_attribute("action", "update_intent_status")
+   554→        .add_attribute("new_status", new_status.to_string()))
+   555→}
+   556→
+   557→fn valid_transition(from: u8, to: u8) -> bool {
+   558→    match from {
+   559→        s if s == STATUS_PENDING    => matches!(to, 1 | 4 | 5),
+   560→        s if s == STATUS_ROUTING    => matches!(to, 2 | 4 | 5),
+   561→        s if s == STATUS_EXECUTING  => matches!(to, 3 | 4),
+   562→        s if s == STATUS_FAILED     => to == STATUS_RESURRECTED,
+   563→        _ => false,
+   564→    }
+   565→}
+   566→
+   567→// ── Route impl ───────────────────────────────────────────────────────────────
+   568→
+   569→fn execute_register_route(
+   570→    deps:            DepsMut,
+   571→    env:             Env,
+   572→    info:            MessageInfo,
+   573→    route_id:        Vec<u8>,
+   574→    intent_hash:     Vec<u8>,
+   575→    anchor_bh:       Vec<u8>,
+   576→    anchor_chain:    u64,
+   577→    execution_chain: u64,
+   578→    entity_id:       Vec<u8>,
+   579→    route_type:      u8,
+   580→) -> StdResult<Response> {
+   581→    require_owner_or_relayer(&deps, &info)?;
+   582→    if anchor_bh.is_empty() {
+   583→        return Err(StdError::generic_err("TRION: zero anchor"));
+   584→    }
+   585→    if route_type > 6 {
+   586→        return Err(StdError::generic_err("TRION: invalid type"));
+   587→    }
+   588→    let k = key(PREFIX_ROUTES, &route_id);
+   589→    if deps.storage.get(&k).is_some() {
+   590→        return Err(StdError::generic_err("TRION: route exists"));
+   591→    }
+   592→    let route = Route {
+   593→        route_id:             route_id.clone(),
+   594→        intent_hash,
+   595→        anchor_bh,
+   596→        execution_bh:         Vec::new(),
+   597→        anchor_chain,
+   598→        execution_chain,
+   599→        entity_id,
+   600→        gas_saved_vs_bridge:  0,
+   601→        beo_continuity:       0,
+   602→        cc_coherence:         0,
+   603→        route_type,
+   604→        is_verified:          false,
+   605→        created_at:           env.block.time.seconds(),
+   606→        finalized_at:         0,
+   607→    };
+   608→    deps.storage.set(&k, &to_json_bytes(&route)?);
+   609→    Ok(Response::new().add_attribute("action", "register_route"))
+   610→}
+   611→
+   612→fn execute_finalize_route(
+   613→    deps:                DepsMut,
+   614→    env:                 Env,
+   615→    info:                MessageInfo,
+   616→    route_id:            Vec<u8>,
+   617→    execution_bh:        Vec<u8>,
+   618→    gas_saved_vs_bridge: u64,
+   619→    beo_continuity:      u64,
+   620→    cc_coherence:        u64,
+   621→) -> StdResult<Response> {
+   622→    require_owner_or_relayer(&deps, &info)?;
+   623→    if execution_bh.is_empty() {
+   624→        return Err(StdError::generic_err("TRION: zero exec bh"));
+   625→    }
+   626→    if beo_continuity > 1_000_000 || cc_coherence > 1_000_000 {
+   627→        return Err(StdError::generic_err("TRION: invalid score"));
+   628→    }
+   629→    let k = key(PREFIX_ROUTES, &route_id);
+   630→    let mut r: Route = from_json_bytes(
+   631→        &deps.storage.get(&k).ok_or_else(|| StdError::generic_err("TRION: route not found"))?
+   632→    )?;
+   633→    if r.is_verified {
+   634→        return Err(StdError::generic_err("TRION: already verified"));
+   635→    }
+   636→    r.execution_bh          = execution_bh;
+   637→    r.gas_saved_vs_bridge   = gas_saved_vs_bridge;
+   638→    r.beo_continuity        = beo_continuity;
+   639→    r.cc_coherence          = cc_coherence;
+   640→    r.is_verified           = true;
+   641→    r.finalized_at          = env.block.time.seconds();
+   642→    deps.storage.set(&k, &to_json_bytes(&r)?);
+   643→    Ok(Response::new().add_attribute("action", "finalize_route"))
+   644→}
+   645→
+   646→// ── Gate impl ─────────────────────────────────────────────────────────────────
+   647→
+   648→fn execute_set_gate_threshold(
+   649→    deps:      DepsMut,
+   650→    _env:      Env,
+   651→    info:      MessageInfo,
+   652→    gate_id:   Vec<u8>,
+   653→    threshold: u64,
+   654→) -> StdResult<Response> {
+   655→    require_owner(&deps, &info)?;
+   656→    if threshold > 1_000_000 {
+   657→        return Err(StdError::generic_err("TRION: invalid score"));
+   658→    }
+   659→    let k = key(b"trion::gates::", &gate_id);
+   660→    let mut g: GateState = match deps.storage.get(&k) {
+   661→        Some(v) => from_json_bytes(&v)?,
+   662→        None => GateState {
+   663→            gate_id: gate_id.clone(),
+   664→            custom_threshold: 0,
+   665→            check_count: 0,
+   666→            pass_count: 0,
+   667→            block_count: 0,
+   668→            last_phi: 0,
+   669→            last_entity: Vec::new(),
+   670→        },
+   671→    };
+   672→    g.custom_threshold = threshold;
+   673→    deps.storage.set(&k, &to_json_bytes(&g)?);
+   674→    Ok(Response::new().add_attribute("action", "set_gate_threshold"))
+   675→}
+   676→
+   677→fn execute_check_execution(
+   678→    deps:           DepsMut,
+   679→    _env:           Env,
+   680→    info:           MessageInfo,
+   681→    gate_id:        Vec<u8>,
+   682→    entity_id:      Vec<u8>,
+   683→    phi:            u64,
+   684→    route_threshold:u64,
+   685→) -> StdResult<Response> {
+   686→    if !read_awa(deps.storage) {
+   687→        return Err(StdError::generic_err("TRION: AWA not enforced"));
+   688→    }
+   689→    let k = key(b"trion::gates::", &gate_id);
+   690→    let mut g: GateState = match deps.storage.get(&k) {
+   691→        Some(v) => from_json_bytes(&v)?,
+   692→        None => GateState {
+   693→            gate_id: gate_id.clone(),
+   694→            custom_threshold: 0,
+   695→            check_count: 0,
+   696→            pass_count: 0,
+   697→            block_count: 0,
+   698→            last_phi: 0,
+   699→            last_entity: Vec::new(),
+   700→        },
+   701→    };
+   702→    let threshold = if g.custom_threshold > 0 { g.custom_threshold } else { route_threshold };
+   703→    g.check_count += 1;
+   704→    g.last_phi     = phi;
+   705→    g.last_entity  = entity_id.clone();
+   706→    let passed = phi >= threshold;
+   707→    if passed {
+   708→        g.pass_count += 1;
+   709→    } else {
+   710→        g.block_count += 1;
+   711→    }
+   712→    deps.storage.set(&k, &to_json_bytes(&g)?);
+   713→    if !passed {
+   714→        return Err(StdError::generic_err("TRION: gate blocked"));
+   715→    }
+   716→    Ok(Response::new()
+   717→        .add_attribute("action", "check_execution")
+   718→        .add_attribute("passed", "true")
+   719→        .add_attribute("phi", phi.to_string())
+   720→        .add_attribute("threshold", threshold.to_string()))
+   721→}
+   722→
+   723→// ── Query ─────────────────────────────────────────────────────────────────────
+   724→
+   725→#[entry_point]
+   726→pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<cosmwasm_std::Binary> {
+   727→    match msg {
+   728→        QueryMsg::GetSignal { entity_id } => {
+   729→            let k = key(PREFIX_SIGNALS, &entity_id);
+   730→            match deps.storage.get(&k) {
+   731→                Some(v) => {
+   732→                    let sig: Signal = from_json_bytes(&v)?;
+   733→                    Ok(cosmwasm_std::to_json_binary(&sig)?)
+   734→                }
+   735→                None => Err(StdError::not_found("signal")),
+   736→            }
+   737→        }
+   738→        QueryMsg::GetBtcpRoute { route_id } | QueryMsg::VerifyExecution { route_id } => {
+   739→            let k = key(PREFIX_SIGNALS, &route_id);
+   740→            match deps.storage.get(&k) {
+   741→                Some(v) => {
+   742→                    let r: BTCPRoute = from_json_bytes(&v)?;
+   743→                    Ok(cosmwasm_std::to_json_binary(&r)?)
+   744→                }
+   745→                None => Err(StdError::not_found("btcp_route")),
+   746→            }
+   747→        }
+   748→        QueryMsg::GetEscrow { escrow_id } => {
+   749→            let k = key(PREFIX_ESCROWS, &escrow_id);
+   750→            match deps.storage.get(&k) {
+   751→                Some(v) => {
+   752→                    let e: Escrow = from_json_bytes(&v)?;
+   753→                    Ok(cosmwasm_std::to_json_binary(&e)?)
+   754→                }
+   755→                None => Err(StdError::not_found("escrow")),
+   756→            }
+   757→        }
+   758→        QueryMsg::GetIntent { intent_hash } => {
+   759→            let k = key(PREFIX_INTENTS, &intent_hash);
+   760→            match deps.storage.get(&k) {
+   761→                Some(v) => {
+   762→                    let i: Intent = from_json_bytes(&v)?;
+   763→                    Ok(cosmwasm_std::to_json_binary(&i)?)
+   764→                }
+   765→                None => Err(StdError::not_found("intent")),
+   766→            }
+   767→        }
+   768→        QueryMsg::GetRoute { route_id } => {
+   769→            let k = key(PREFIX_ROUTES, &route_id);
+   770→            match deps.storage.get(&k) {
+   771→                Some(v) => {
+   772→                    let r: Route = from_json_bytes(&v)?;
+   773→                    Ok(cosmwasm_std::to_json_binary(&r)?)
+   774→                }
+   775→                None => Err(StdError::not_found("route")),
+   776→            }
+   777→        }
+   778→        QueryMsg::GetGate { gate_id } => {
+   779→            let k = key(b"trion::gates::", &gate_id);
+   780→            match deps.storage.get(&k) {
+   781→                Some(v) => {
+   782→                    let g: GateState = from_json_bytes(&v)?;
+   783→                    Ok(cosmwasm_std::to_json_binary(&g)?)
+   784→                }
+   785→                None => Err(StdError::not_found("gate")),
+   786→            }
+   787→        }
+   788→        QueryMsg::GetOwner {} => {
+   789→            Ok(cosmwasm_std::to_json_binary(&read_owner(deps.storage)?)?)
+   790→        }
+   791→        QueryMsg::GetRelayer {} => {
+   792→            Ok(cosmwasm_std::to_json_binary(&read_relayer(deps.storage)?)?)
+   793→        }
+   794→        QueryMsg::AwaEnforced {} => {
+   795→            let _ = env;
+   796→            Ok(cosmwasm_std::to_json_binary(&read_awa(deps.storage))?)
+   797→        }
+   798→    }
+   799→}
+   800→

@@ -1,0 +1,410 @@
+    50→    UTXO = 5         # Bitcoin, Bitcoin Cash, Dogecoin
+    51→    TON = 6          # Telegram Open Network
+    52→    NEAR = 7         # NEAR Protocol
+    53→    STARKNET = 8     # StarkNet Cairo
+    54→    ZKSYNC = 9       # zkSync Era
+    55→    SCROLL = 10      # Scroll zkEVM
+    56→    TRON = 11        # TRON
+    57→    ALGORAND = 12    # Algorand
+    58→    CARDANO = 13     # Cardano
+    59→    HEDERA = 14      # Hedera Hashgraph
+    60→    WAVES = 15       # Waves
+    61→    XRPL = 16        # XRP Ledger
+    62→    MULTIVERSX = 17  # MultiversX
+    63→    VECHAIN = 18     # VeChainThor
+    64→    STELLAR = 19     # Stellar (MVM)
+    65→    # NOTE: Polkadot VM (PVM) is the SUBSTRATE family (value 4) — no separate
+    66→    # enum member, duplicate IntEnum values break list(VmFamily) and lookups.
+    67→
+    68→
+    69→@dataclass
+    70→class ChainConfig:
+    71→    """Configuration for a single chain in the bootstrap sequence."""
+    72→    chain_id:           int
+    73→    name:               str
+    74→    vm_family:          VmFamily
+    75→    rpc_url:            str
+    76→    explorer_url:       str
+    77→    btcp_phase:         BootstrapPhase
+    78→    trion_oracle_addr:  Optional[str] = None
+    79→    btcp_escrow_addr:   Optional[str] = None
+    80→    sanctions_oracle_addr: Optional[str] = None
+    81→    native_symbol:      str = ""
+    82→    native_decimals:    int = 18
+    83→    block_time_sec:     float = 12.0
+    84→    finality_blocks:    int = 32
+    85→    gas_token_symbol:   str = "ETH"
+    86→    is_live:            bool = False
+    87→    deployed_at:        Optional[float] = None
+    88→
+    89→    def to_dict(self) -> dict:
+    90→        d = asdict(self)
+    91→        d["vm_family"] = self.vm_family.name
+    92→        d["btcp_phase"] = self.btcp_phase.name
+    93→        return d
+    94→
+    95→
+    96→# ── Complete Chain Registry (106 chains, 14 VM families) ──────────────────────
+    97→
+    98→def _stable_chain_id(name: str) -> int:
+    99→    """Deterministic synthetic chain id (sha3-based, stable across processes).
+   100→    Python's built-in hash() is salted per-process and would change on restart."""
+   101→    import hashlib
+   102→    return int.from_bytes(hashlib.sha3_256(name.encode()).digest()[:4], "big") % 100000
+   103→
+   104→
+   105→def build_chain_registry() -> List[ChainConfig]:
+   106→    """Build the complete 106-chain registry with bootstrap phase assignments."""
+   107→    chains: List[ChainConfig] = []
+   108→
+   109→    # ── Phase 1: First 3 EVM chains ──────────────────────────────────────────
+   110→    chains.extend([
+   111→        ChainConfig(1, "Ethereum", VmFamily.EVM, "https://ethereum.publicnode.com",
+   112→                    "https://etherscan.io", BootstrapPhase.PHASE_1_FIRST_EVM,
+   113→                    "0x1d129D34279d1246aB08a41dfE610EaF8D794237", None, None,
+   114→                    "ETH", 18, 12.0, 32, "ETH", True, time.time()),
+   115→        ChainConfig(8453, "Base", VmFamily.EVM, "https://mainnet.base.org",
+   116→                    "https://basescan.org", BootstrapPhase.PHASE_1_FIRST_EVM,
+   117→                    None, None, None, "ETH", 18, 2.0, 2, "ETH", True, time.time()),
+   118→        ChainConfig(42161, "Arbitrum One", VmFamily.EVM, "https://arb1.arbitrum.io/rpc",
+   119→                    "https://arbiscan.io", BootstrapPhase.PHASE_1_FIRST_EVM,
+   120→                    None, None, None, "ETH", 18, 0.25, 1, "ETH", True, time.time()),
+   121→    ])
+   122→
+   123→    # ── Phase 2: Major EVM L2s ───────────────────────────────────────────────
+   124→    phase2_evm = [
+   125→        (56, "BNB Smart Chain", "https://bsc-dataseed.binance.org", "https://bscscan.com", "BNB", 18, 3.0, 15),
+   126→        (137, "Polygon", "https://polygon-rpc.com", "https://polygonscan.com", "MATIC", 18, 2.0, 32),
+   127→        (10, "Optimism", "https://mainnet.optimism.io", "https://optimistic.etherscan.io", "ETH", 18, 2.0, 2),
+   128→        (43114, "Avalanche C-Chain", "https://api.avax.network/ext/bc/C/rpc", "https://snowtrace.io", "AVAX", 18, 2.0, 3),
+   129→        (250, "Fantom", "https://rpcapi.fantom.network", "https://ftmscan.com", "FTM", 18, 1.0, 10),
+   130→        (42220, "Celo", "https://forno.celo.org", "https://celoscan.io", "CELO", 18, 5.0, 12),
+   131→        (59144, "Linea", "https://rpc.linea.build", "https://lineascan.build", "ETH", 18, 2.0, 2),
+   132→        (534352, "Scroll", "https://rpc.scroll.io", "https://scrollscan.com", "ETH", 18, 3.0, 4),
+   133→        (324, "zkSync Era", "https://mainnet.era.zksync.io", "https://explorer.zksync.io", "ETH", 18, 2.0, 2),
+   134→        (5000, "Mantle", "https://rpc.mantle.xyz", "https://mantlescan.org", "MNT", 18, 2.0, 2),
+   135→        (81457, "Blast", "https://rpc.blast.io", "https://blastscan.io", "ETH", 18, 2.0, 2),
+   136→        (169, "Manta Pacific", "https://pacific-rpc.manta.network/http", "https://pacific-info.manta.network", "ETH", 18, 2.0, 2),
+   137→        (34443, "Mode", "https://mainnet.mode.network", "https://modescan.io", "ETH", 18, 2.0, 2),
+   138→        (167000, "Taiko", "https://rpc.mainnet.taiko.xyz", "https://taikoscan.network", "ETH", 18, 2.0, 2),
+   139→        (252, "Fraxtal", "https://rpc.frax.com", "https://fraxscan.com", "ETH", 18, 2.0, 2),
+   140→        (1088, "Metis", "https://andromeda.metis.io/?owner=1088", "https://andromeda-explorer.metis.io", "METIS", 18, 2.0, 2),
+   141→        (146, "Sonic", "https://rpc.soniclabs.com", "https://sonicscan.org", "S", 18, 1.0, 10),
+   142→        (196, "X Layer", "https://rpc.xlayer.tech", "https://www.oklink.com/xlayer", "OKB", 18, 2.0, 2),
+   143→        (50, "XDC Network", "https://rpc.xinfin.network", "https://xdcscan.com", "XDC", 18, 2.0, 10),
+   144→        (1514, "Story Protocol", "https://mainnet.storyrpc.io", "https://storyscan.xyz", "IP", 18, 5.0, 12),
+   145→        (80094, "Berachain", "https://rpc.berachain.com", "https://berascan.com", "BERA", 18, 2.0, 2),
+   146→        (16661, "0G Mainnet", "https://evmrpc.0g.ai", "https://0g.ai", "ETH", 18, 2.0, 2),
+   147→        (177, "HashKey Mainnet", "https://mainnet.hsk.xyz", "https://hsk.info", "HSK", 18, 3.0, 15),
+   148→        (677, "BOT Chain", "https://mainnet.botchain.org", "https://botscan.io", "BOT", 18, 3.0, 15),
+   149→        (1101, "Polygon zkEVM", "https://zkevm-rpc.com", "https://zkevm.polygonscan.com", "ETH", 18, 2.0, 2),
+   150→        (1313161554, "Aurora", "https://mainnet.aurora.dev", "https://aurorascan.dev", "ETH", 18, 1.0, 10),
+   151→        (1284, "Moonbeam", "https://rpc.api.moonbeam.network", "https://moonbeam.moonscan.io", "GLMR", 18, 12.0, 32),
+   152→        (1285, "Moonriver", "https://rpc.api.moonriver.moonbeam.network", "https://moonriver.moonscan.io", "MOVR", 18, 12.0, 32),
+   153→        (100, "Gnosis", "https://rpc.gnosischain.com", "https://gnosisscan.io", "xDAI", 18, 5.0, 12),
+   154→        (2000, "Dogechain", "https://rpc.dogechain.dog", "https://explorer.dogechain.dog", "DC", 18, 2.0, 10),
+   155→        (2001, "Milkomeda C1", "https://rpc-mainnet-cardano-evm.c1.milkomeda.com", "https://explorer-mainnet-cardano-evm.c1.milkomeda.com", "mADA", 18, 2.0, 10),
+   156→        (300, "Optopia", "https://rpc-r2.optimismgateway.com", "https://optimism.blockscout.com", "ETH", 18, 2.0, 2),
+   157→    ]
+   158→
+   159→    for cid, name, rpc, explorer, sym, dec, bt, fin in phase2_evm:
+   160→        vm = VmFamily.ZKSYNC if "zkSync" in name else (VmFamily.SCROLL if "Scroll" in name else VmFamily.EVM)
+   161→        chains.append(ChainConfig(cid, name, vm, rpc, explorer,
+   162→                                  BootstrapPhase.PHASE_2_MAJOR_L2,
+   163→                                  None, None, None, sym, dec, bt, fin, sym, True, time.time()))
+   164→
+   165→    # ── Phase 3: Cross-VM (Solana SVM) ───────────────────────────────────────
+   166→    chains.extend([
+   167→        ChainConfig(5773521, "Solana", VmFamily.SVM, "https://api.mainnet-beta.solana.com",
+   168→                    "https://solscan.io", BootstrapPhase.PHASE_3_CROSS_VM,
+   169→                    None, None, None, "SOL", 9, 0.4, 32, "SOL", True, time.time()),
+   170→    ])
+   171→
+   172→    # ── Phase 4: Expansion (Cosmos, Move, Substrate, TON, NEAR, StarkNet) ────
+   173→    phase4_chains = [
+   174→        # Cosmos
+   175→        (0, "Cosmos Hub", VmFamily.COSMWASM, "https://rpc.cosmos.directory/cosmoshub", "https://www.mintscan.io/cosmos", "ATOM", 6, 6.0, 3),
+   176→        (0, "Osmosis", VmFamily.COSMWASM, "https://rpc.osmosis.zone", "https://www.mintscan.io/osmosis", "OSMO", 6, 6.0, 3),
+   177→        (0, "Juno", VmFamily.COSMWASM, "https://rpc.juno.anatolianteam.com", "https://www.mintscan.io/juno", "JUNO", 6, 6.0, 3),
+   178→        (0, "Celestia", VmFamily.COSMWASM, "https://rpc.celestia.pops.one", "https://celerscan.io", "TIA", 6, 15.0, 3),
+   179→        (0, "Injective", VmFamily.COSMWASM, "https://rpc-injective-ec1.diamondnodes.com", "https://www.mintscan.io/injective", "INJ", 18, 2.0, 3),
+   180→        (0, "Sei", VmFamily.COSMWASM, "https://rpc.sei.chainnodes.org", "https://www.mintscan.io/sei", "SEI", 6, 0.5, 3),
+   181→        (10006, "dYdX", VmFamily.COSMWASM, "https://rpc.dydx.crypto.org", "https://www.mintscan.io/dydx", "DYDX", 18, 2.0, 3),
+   182→        # Move VM
+   183→        (20100, "Sui", VmFamily.MOVE, "https://full.mainnet.sui.io", "https://suiscan.xyz", "SUI", 9, 0.4, 32),
+   184→        (20000, "Aptos", VmFamily.MOVE, "https://fullnode.mainnet.aptoslabs.com", "https://aptoscan.com", "APT", 8, 0.4, 32),
+   185→        # Substrate
+   186→        (25000, "Polkadot", VmFamily.SUBSTRATE, "wss://rpc.polkadot.io", "https://polkadot.subscan.io", "DOT", 10, 6.0, 10),
+   187→        (25002, "Kusama", VmFamily.SUBSTRATE, "wss://kusama-rpc.polkadot.io", "https://kusama.subscan.io", "KSM", 12, 6.0, 10),
+   188→        # TON
+   189→        (22000, "TON", VmFamily.TON, "https://toncenter.com/api/v2/jsonRPC", "https://tonscan.org", "TON", 9, 5.0, 10),
+   190→        # NEAR
+   191→        (23000, "NEAR Protocol", VmFamily.NEAR, "https://rpc.mainnet.near.org", "https://nearblocks.io", "NEAR", 24, 1.0, 32),
+   192→        # StarkNet
+   193→        (0, "StarkNet", VmFamily.STARKNET, "https://alpha-mainnet.starknet.io", "https://starkscan.co", "ETH", 18, 3.0, 10),
+   194→        # More EVM L2s and alt-L1s
+   195→        (7700, "Canto", VmFamily.EVM, "https://canto.gravitychain.io", "https://tuber.build", "CANTO", 18, 6.0, 10, "CANTO"),
+   196→        (2222, "Kava EVM", VmFamily.EVM, "https://evm.kava.io", "https://kavascan.com", "KAVA", 18, 6.0, 10, "KAVA"),
+   197→        (42262, "Oasis Sapphire", VmFamily.EVM, "https://sapphire.oasis.io", "https://explorer.oasis.io", "ROSE", 18, 5.0, 10, "ROSE"),
+   198→        (1001, "Klaytn", VmFamily.EVM, "https://public-en-cypress.klaytn.net", "https://scope.klaytn.com", "KLAY", 18, 1.0, 10, "KLAY"),
+   199→        (201022, "Botanix", VmFamily.EVM, "https://rpc.botanixlabs.xyz", "https://explorer.botanixlabs.xyz", "BTC", 18, 2.0, 2, "BTC"),
+   200→    ]
+   201→
+   202→    for entry in phase4_chains:
+   203→        cid, name, vm, rpc, explorer, sym, dec, bt, fin = entry[:9]
+   204→        gas_tok = entry[9] if len(entry) > 9 else sym
+   205→        chains.append(ChainConfig(cid if cid > 0 else _stable_chain_id(name),
+   206→                                  name, vm, rpc, explorer,
+   207→                                  BootstrapPhase.PHASE_4_EXPANSION,
+   208→                                  None, None, None, sym, dec, bt, fin, gas_tok, False, None))
+   209→
+   210→    # ── Phase 5: 50 chains (more EVM, Cosmos, Move) ──────────────────────────
+   211→    phase5_chains = [
+   212→        # More EVM
+   213→        (288, "Boba Network", VmFamily.EVM, "https://mainnet.boba.network", "https://bobascan.com", "ETH", 18, 2.0, 2),
+   214→        (108, "ThunderCore", VmFamily.EVM, "https://mainnet-rpc.thundercore.com", "https://viewblock.io/thundercore", "TT", 18, 1.0, 10),
+   215→        (200, "OKX Chain", VmFamily.EVM, "https://exchainrpc.okex.org", "https://www.oklink.com/oktc", "OKT", 18, 2.0, 10),
+   216→        (66, "OKB Chain", VmFamily.EVM, "https://okbchain.rpc.okbchain.org", "https://www.oklink.com/okbchain", "OKB", 18, 2.0, 10),
+   217→        (1231, "ULtronGLK", VmFamily.EVM, "https://ultronglk.com", "https://ultronglk.com", "ULG", 18, 3.0, 10),
+   218→        # More Cosmos
+   219→        (0, "Kujira", VmFamily.COSMWASM, "https://rpc.kujira.interbloc.org", "https://kujira.explorers.guru", "KUJI", 6, 6.0, 3),
+   220→        (0, "Stargaze", VmFamily.COSMWASM, "https://rpc.stargaze.ezstaking.net", "https://www.mintscan.io/stargaze", "STARS", 6, 6.0, 3),
+   221→        (0, "Chihuahua", VmFamily.COSMWASM, "https://rpc.chihuahua.wtf", "https://www.mintscan.io/chihuahua", "HUAHUA", 6, 6.0, 3),
+   222→        (0, "Comdex", VmFamily.COSMWASM, "https://rpc.comdex.one", "https://www.mintscan.io/comdex", "CMDX", 6, 6.0, 3),
+   223→        (0, "Persistence", VmFamily.COSMWASM, "https://rpc.persistence.one", "https://www.mintscan.io/persistence", "XPRT", 6, 6.0, 3),
+   224→        # Algorand
+   225→        (0, "Algorand", VmFamily.ALGORAND, "https://mainnet-api.algonode.cloud", "https://lora.algokit.io", "ALGO", 6, 3.0, 10),
+   226→        # Cardano
+   227→        (0, "Cardano", VmFamily.CARDANO, "https://cardano-mainnet.blockfrost.io/api/v0", "https://cardanoscan.io", "ADA", 6, 20.0, 10),
+   228→        # More UTXO
+   229→        (0, "Bitcoin", VmFamily.UTXO, "https://blockstream.info/api", "https://blockchain.com/btc", "BTC", 8, 600.0, 6),
+   230→        (0, "Bitcoin Cash", VmFamily.UTXO, "https://api.fullstack.cash/v5", "https://blockchair.com/bitcoin-cash", "BCH", 8, 600.0, 6),
+   231→        (0, "Dogecoin", VmFamily.UTXO, "https://api.tatum.io/v3/dogecoin", "https://blockchair.com/dogecoin", "DOGE", 8, 60.0, 6),
+   232→        (0, "Litecoin", VmFamily.UTXO, "https://api.tatum.io/v3/litecoin", "https://blockchair.com/litecoin", "LTC", 8, 150.0, 6),
+   233→        # TRON
+   234→        (0, "TRON", VmFamily.TRON, "https://api.trongrid.io", "https://tronscan.org", "TRX", 6, 3.0, 19),
+   235→    ]
+   236→
+   237→    for cid, name, vm, rpc, explorer, sym, dec, bt, fin in phase5_chains:
+   238→        chains.append(ChainConfig(cid if cid > 0 else _stable_chain_id(name),
+   239→                                  name, vm, rpc, explorer,
+   240→                                  BootstrapPhase.PHASE_5_50_CHAINS,
+   241→                                  None, None, None, sym, dec, bt, fin, sym, False, None))
+   242→
+   243→    # ── Phase 6: 100 chains (fill remaining) ────────────────────────────────
+   244→    phase6_chains = [
+   245→        # More EVM L2/L3
+   246→        (534353, "Scroll Sepolia", VmFamily.SCROLL, "", "", "ETH", 18, 3.0, 4),
+   247→        (11155111, "Sepolia", VmFamily.EVM, "", "", "ETH", 18, 12.0, 32),
+   248→        (17000, "Holesky", VmFamily.EVM, "", "", "ETH", 18, 12.0, 32),
+   249→        (10200, "Chiado", VmFamily.EVM, "", "", "xDAI", 18, 5.0, 12),
+   250→        (421614, "Arbitrum Sepolia", VmFamily.EVM, "", "", "ETH", 18, 0.25, 1),
+   251→        (84532, "Base Sepolia", VmFamily.EVM, "", "", "ETH", 18, 2.0, 2),
+   252→        (80002, "Polygon Amoy", VmFamily.EVM, "", "", "MATIC", 18, 2.0, 32),
+   253→        (11155420, "Optimism Sepolia", VmFamily.EVM, "", "", "ETH", 18, 2.0, 2),
+   254→        # More alt-L1s
+   255→        (0, "Sui Testnet", VmFamily.MOVE, "", "", "SUI", 9, 0.4, 32),
+   256→        (0, "Aptos Testnet", VmFamily.MOVE, "", "", "APT", 8, 0.4, 32),
+   257→        (0, "NEAR Testnet", VmFamily.NEAR, "", "", "NEAR", 24, 1.0, 32),
+   258→        (0, "Solana Devnet", VmFamily.SVM, "", "", "SOL", 9, 0.4, 32),
+   259→        # Additional testnets
+   260→        (0, "Cosmos Testnet", VmFamily.COSMWASM, "", "", "ATOM", 6, 6.0, 3),
+   261→        (0, "StarkNet Testnet", VmFamily.STARKNET, "", "", "ETH", 18, 3.0, 10),
+   262→        (0, "Bitcoin Testnet", VmFamily.UTXO, "", "", "BTC", 8, 600.0, 6),
+   263→        (0, "Cardano Testnet", VmFamily.CARDANO, "", "", "ADA", 6, 20.0, 10),
+   264→        (0, "Algorand Testnet", VmFamily.ALGORAND, "", "", "ALGO", 6, 3.0, 10),
+   265→        (0, "Polkadot Testnet", VmFamily.SUBSTRATE, "", "", "DOT", 10, 6.0, 10),
+   266→        (0, "TON Testnet", VmFamily.TON, "", "", "TON", 9, 5.0, 10),
+   267→        (0, "TRON Testnet", VmFamily.TRON, "", "", "TRX", 6, 3.0, 19),
+   268→        # Additional chains to reach 100+
+   269→        (0, "Ethereum Classic", VmFamily.EVM, "https://etc.rivet.link", "https://blockscout.com/etc/mainnet", "ETC", 18, 13.0, 32),
+   270→        (0, "Filecoin EVM", VmFamily.EVM, "https://api.node.glif.io/rpc/v1", "https://filfox.info/en", "FIL", 18, 30.0, 10),
+   271→        (0, "Cronos", VmFamily.EVM, "https://evm.cronos.org", "https://cronoscan.com", "CRO", 18, 5.0, 10),
+   272→        (0, "Velos", VmFamily.EVM, "https://rpc.velos.io", "https://explorer.velos.io", "ETH", 18, 2.0, 2),
+   273→        (0, "Zora", VmFamily.EVM, "https://rpc.zora.energy", "https://explorer.zora.energy", "ETH", 18, 2.0, 2),
+   274→        (0, "Race", VmFamily.EVM, "https://rpc.race.org", "https://explorer.race.org", "ETH", 18, 2.0, 2),
+   275→        (0, "Astar EVM", VmFamily.EVM, "https://evm.astar.network", "https://blockscout.com/astar", "ASTR", 18, 12.0, 10),
+   276→        (0, "Flare", VmFamily.EVM, "https://flare-api.flare.network/ext/C/rpc", "https://flare-explorer.flare.network", "FLR", 18, 2.0, 10),
+   277→    ]
+   278→
+   279→    for cid, name, vm, rpc, explorer, sym, dec, bt, fin in phase6_chains:
+   280→        chains.append(ChainConfig(cid if cid > 0 else _stable_chain_id(name),
+   281→                                  name, vm, rpc, explorer,
+   282→                                  BootstrapPhase.PHASE_6_100_CHAINS,
+   283→                                  None, None, None, sym, dec, bt, fin, sym, False, None))
+   284→
+   285→    # ── Gap-fill: chains present in shared manifest but missing here ─────────
+   286→    # (audit: tests/chain_coverage_audit.py — 52 chains consolidated)
+   287→    _gap_evm = [
+   288→        (43113, "Avalanche Fuji", "https://api.avax-test.network/ext/bc/C/rpc", "https://testnet.snowtrace.io", "AVAX", 18, 2.0, 3),
+   289→        (97, "BNB Testnet", "https://data-seed-pretests0-1.binance.org:8545", "https://testnet.bscscan.com", "tBNB", 18, 3.0, 15),
+   290→        (60808, "BOB", "https://rpc.gobob.xyz", "https://explorer.gobob.xyz", "ETH", 18, 2.0, 2),
+   291→        (200901, "Bitlayer", "https://rpc.bitlayer.org", "https://www.bitlayerScan.com", "BTC", 18, 2.0, 6),
+   292→        (8886, "BotChain", "https://rpc.botchain.ai", "https://scan.botchain.ai", "BOT", 18, 2.0, 2),
+   293→        (1116, "Core", "https://rpc.coredao.org", "https://scan.coredao.org", "CORE", 18, 3.0, 6),
+   294→        (7560, "Cyber", "https://cyber.alt.technology", "https://cyberscan.co", "CYBER", 18, 2.0, 2),
+   295→        (8822, "Iota EVM", "https://evm.wasp.sc.iota.org", "https://explorer.evm.iota.org", "IOTA", 18, 5.0, 10),
+   296→        (8217, "Kaia (Klaytn)", "https://public-en.node.kaia.io", "https://kaiascan.io", "KAIA", 18, 1.0, 1),
+   297→        (255, "Kroma", "https://api.kroma.network/l1/rpc", "https://kromascan.io", "ETH", 18, 2.0, 2),
+   298→        (245022934, "Neon EVM", "https://neon-proxy-mainnet.solana.p2p.org", "https://neonscan.org", "NEON", 18, 2.5, 1),
+   299→        (30, "Rootstock", "https://public.nodes.rsk.co", "https://explorer.rsk.co", "RBTC", 18, 30.0, 10),
+   300→        (1329, "Sei EVM", "https://evm-rpc.sei-apis.com", "https://seitrace.com", "SEI", 18, 0.5, 1),
+   301→        (40, "Telos EVM", "https://mainnet.telos.net/evm", "https://www.teloscan.io", "TLOS", 18, 0.5, 1),
+   302→        (1111, "WEMIX", "https://api.wemix.com", "https://wemixscan.com", "WEMIX", 18, 1.0, 1),
+   303→    ]
+   304→    for cid, name, rpc, explorer, sym, dec, bt, fin in _gap_evm:
+   305→        chains.append(ChainConfig(cid, name, VmFamily.EVM, rpc, explorer,
+   306→                                  BootstrapPhase.PHASE_6_100_CHAINS,
+   307→                                  None, None, None, sym, dec, bt, fin, sym, False, None))
+   308→
+   309→    # Cosmos-family gaps
+   310→    _gap_cosmos = [
+   311→        ("Axelar", "https://axelar-rpc.publicnode.com", "AXL", "axelar"),
+   312→        ("Kava", "https://kava-rpc.publicnode.com", "KAVA", "kava"),
+   313→        ("Initia", "https://rpc.initia.tech", "INIT", "initia"),
+   314→        ("Saga", "https://rpc.saga.tendermint", "SAGA", "saga"),
+   315→        ("Noble", "https://noble-rpc.polkachu.com", "USDC", "noble"),
+   316→        ("Neutron", "https://neutron-rpc.publicnode.com", "NTRN", "neutron"),
+   317→        ("Terra Classic", "https://terra-classic-rpc.publicnode.com", "LUNC", "terra-classic"),
+   318→        ("Terra Phoenix", "https://terra-rpc.publicnode.com", "LUNA", "terra"),
+   319→    ]
+   320→    for name, rpc, sym, slug in _gap_cosmos:
+   321→        chains.append(ChainConfig(_stable_chain_id(name), name, VmFamily.COSMWASM, rpc,
+   322→                                  f"https://explorer.{slug}.com" if "publicnode" not in rpc else f"https://mintscan.io/{slug}",
+   323→                                  BootstrapPhase.PHASE_6_100_CHAINS,
+   324→                                  None, None, None, sym, 6, 6.0, 6, sym, False, None))
+   325→
+   326→    # UTXO gaps
+   327→    chains.append(ChainConfig(2031, "Dash", VmFamily.UTXO, "https://dash.nownodes.io", "https://explorer.dash.org",
+   328→                              BootstrapPhase.PHASE_6_100_CHAINS, None, None, None,
+   329→                              "DASH", 8, 150.0, 6, "DASH", False, None))
+   330→    chains.append(ChainConfig(2003, "Bitcoin Testnet4", VmFamily.UTXO, "https://mempool.space/testnet4/api",
+   331→                              "https://mempool.space/testnet4",
+   332→                              BootstrapPhase.PHASE_6_100_CHAINS, None, None, None,
+   333→                              "tBTC", 8, 600.0, 6, "BTC", False, None))
+   334→
+   335→    # Non-EVM mainnets that ARE live-indexed by dedicated crates
+   336→    _gap_native = [
+   337→        (5001, "Aptos Mainnet", VmFamily.MOVE, "https://fullnode.mainnet.aptoslabs.com/v1", "https://explorer.aptoslabs.com", "APT", 8, 1.0, 1),
+   338→        (501, "Movement Bardock", VmFamily.MOVE, "https://bardock-testnet-beta-rpc.movementlabs.xyz/v1", "https://explorer.movementlabs.xyz", "MOVE", 8, 1.0, 1),
+   339→        (5002, "Movement Mainnet", VmFamily.MOVE, "https://mainnet.movementnetwork.xyz/v1", "https://explorer.movementnetwork.xyz", "MOVE", 8, 1.0, 1),
+   340→        (6001, "Sui Mainnet", VmFamily.MOVE, "https://fullnode.mainnet.sui.io", "https://suiscan.xyz", "SUI", 9, 3.0, 1),
+   341→        (111559111, "Solana Testnet", VmFamily.SVM, "https://api.testnet.solana.com", "https://solscan.io", "SOL", 9, 0.4, 32),
+   342→        (1200, "NEAR Mainnet", VmFamily.NEAR, "https://rpc.mainnet.near.org", "https://nearblocks.io", "NEAR", 24, 1.0, 1),
+   343→        (1100, "TON Mainnet", VmFamily.TON, "https://toncenter.com/api/v2", "https://tonviewer.com", "TON", 9, 5.0, 5),
+   344→        (7001, "Tron Mainnet", VmFamily.TRON, "https://api.trongrid.io", "https://tronscan.org", "TRX", 6, 3.0, 20),
+   345→        (7002, "Tron Shasta", VmFamily.TRON, "https://api.shasta.trongrid.io", "https://shasta.tronscan.org", "TRX", 6, 3.0, 20),
+   346→        (24000, "Starknet Mainnet", VmFamily.STARKNET, "https://starknet-mainnet.public.blastapi.io", "https://starkscan.co", "STRK", 18, 2.0, 10),
+   347→        (24001, "Starknet Sepolia", VmFamily.STARKNET, "https://starknet-sepolia.public.blastapi.io", "https://sepolia.starkscan.co", "STRK", 18, 2.0, 10),
+   348→        (27000, "Stellar Mainnet", VmFamily.STELLAR, "https://horizon.stellar.org", "https://stellar.expert", "XLM", 7, 5.0, 5),
+   349→        (27001, "Stellar Testnet", VmFamily.STELLAR, "https://horizon-testnet.stellar.org", "https://stellar.expert", "XLM", 7, 5.0, 5),
+   350→        (9000, "MultiversX", VmFamily.MULTIVERSX, "https://api.multiversx.com", "https://explorer.multiversx.com", "EGLD", 18, 6.0, 6),
+   351→        (30000, "Waves", VmFamily.WAVES, "https://nodes.wavesnodes.com", "https://wavesexplorer.com", "WAVES", 8, 60.0, 6),
+   352→        (31000, "XRPL", VmFamily.XRPL, "https://s1.ripple.com:51234", "https://livenet.xrpl.org", "XRP", 6, 4.0, 4),
+   353→        (28000, "Hedera", VmFamily.HEDERA, "https://mainnet.hashio.io/api", "https://hashscan.io", "HBAR", 8, 3.0, 3),
+   354→        (28001, "Hedera Testnet", VmFamily.HEDERA, "https://testnet.hashio.io/api", "https://hashscan.io/testnet", "HBAR", 8, 3.0, 3),
+   355→        (29000, "Vechain", VmFamily.VECHAIN, "https://mainnet.vechain.org", "https://vechainstats.com", "VET", 18, 10.0, 10),
+   356→        (25001, "Polkadot Westend", VmFamily.SUBSTRATE, "https://westend-rpc.polkadot.io", "https://westend.subscan.io", "WND", 12, 6.0, 6),
+   357→        (9401, "Cardano Preprod", VmFamily.CARDANO, "https://preprod.koios.rest/api/v1", "https://preprod.cardanoscan.io", "ADA", 6, 20.0, 6),
+   358→    ]
+   359→    for cid, name, vm, rpc, explorer, sym, dec, bt, fin in _gap_native:
+   360→        chains.append(ChainConfig(cid, name, vm, rpc, explorer,
+   361→                                  BootstrapPhase.PHASE_6_100_CHAINS,
+   362→                                  None, None, None, sym, dec, bt, fin, sym, False, None))
+   363→
+   364→
+   365→    # ── Name-variant aliases: shared manifest names for existing chains ─────
+   366→    _aliases = [
+   367→        ("Polygon PoS", _stable_chain_id("Polygon PoS"), "Polygon"),
+   368→        ("OKB Chain (OKTC)", _stable_chain_id("OKB Chain (OKTC)"), "OKB Chain"),
+   369→        ("Chiado (Gnosis)", _stable_chain_id("Chiado (Gnosis)"), "Chiado"),
+   370→        ("Ethereum Sepolia", _stable_chain_id("Ethereum Sepolia"), "Sepolia"),
+   371→        ("Ethereum Holesky", _stable_chain_id("Ethereum Holesky"), "Holesky"),
+   372→        ("Solana Mainnet", _stable_chain_id("Solana Mainnet"), "Solana"),
+   373→    ]
+   374→    for name, cid, existing in _aliases:
+   375→        if name not in {c.name for c in chains}:
+   376→            existing_chain = next((c for c in chains if c.name == existing), None)
+   377→            if existing_chain:
+   378→                chains.append(ChainConfig(cid, name, existing_chain.vm_family,
+   379→                                          existing_chain.rpc_url, existing_chain.explorer_url,
+   380→                                          existing_chain.btcp_phase, None, None, None,
+   381→                                          existing_chain.native_symbol, existing_chain.native_decimals,
+   382→                                          existing_chain.block_time_sec, existing_chain.finality_blocks,
+   383→                                          existing_chain.gas_token_symbol, existing_chain.is_live, None))
+   384→
+   385→    return chains
+   386→
+   387→
+   388→def compute_bridge_pairs_eliminated(n: int) -> int:
+   389→    """Bridge pairs eliminated = N × (N-1) / 2."""
+   390→    return n * (n - 1) // 2
+   391→
+   392→
+   393→def get_bootstrap_status(chains: List[ChainConfig]) -> dict:
+   394→    """Get the current bootstrap status across all phases."""
+   395→    phase_counts: Dict[BootstrapPhase, int] = {}
+   396→    vm_counts: Dict[VmFamily, int] = {}
+   397→    live_count = 0
+   398→
+   399→    for c in chains:
+   400→        phase_counts[c.btcp_phase] = phase_counts.get(c.btcp_phase, 0) + 1
+   401→        vm_counts[c.vm_family] = vm_counts.get(c.vm_family, 0) + 1
+   402→        if c.is_live:
+   403→            live_count += 1
+   404→
+   405→    # Compute cumulative bridge pairs eliminated at each phase
+   406→    phase_pairs = {}
+   407→    cumulative = 0
+   408→    for phase in sorted(phase_counts.keys()):
+   409→        cumulative += phase_counts[phase]
+   410→        phase_pairs[phase.name] = {
+   411→            "chains_added": phase_counts[phase],
+   412→            "cumulative_chains": cumulative,
+   413→            "pairs_eliminated": compute_bridge_pairs_eliminated(cumulative),
+   414→        }
+   415→
+   416→    return {
+   417→        "total_chains": len(chains),
+   418→        "live_chains": live_count,
+   419→        "vm_families": len(vm_counts),
+   420→        "phase_distribution": {p.name: c for p, c in phase_counts.items()},
+   421→        "vm_distribution": {v.name: c for v, c in vm_counts.items()},
+   422→        "bridge_pairs_eliminated": compute_bridge_pairs_eliminated(len(chains)),
+   423→        "phase_progression": phase_pairs,
+   424→        "validator_coverage_tiers": {
+   425→            "tier_1_1_5_chains": "1.0× BASE_STAKE",
+   426→            "tier_2_6_20_chains": "2.5× BASE_STAKE",
+   427→            "tier_3_21_50_chains": "5.0× BASE_STAKE",
+   428→            "tier_4_51_plus_chains": "10.0× BASE_STAKE",
+   429→        },
+   430→    }
+   431→
+   432→
+   433→# ── Self-test ──────────────────────────────────────────────────────────────────
+   434→
+   435→if __name__ == "__main__":
+   436→    chains = build_chain_registry()
+   437→    status = get_bootstrap_status(chains)
+   438→
+   439→    print("=== Mainnet Bootstrap Sequence ===\n")
+   440→    print(f"Total chains: {status['total_chains']}")
+   441→    print(f"Live chains: {status['live_chains']}")
+   442→    print(f"VM families: {status['vm_families']}")
+   443→    print(f"Bridge pairs eliminated: {status['bridge_pairs_eliminated']:,}")
+   444→    print()
+   445→
+   446→    print("Phase progression:")
+   447→    for phase, data in status["phase_progression"].items():
+   448→        print(f"  {phase}: +{data['chains_added']} chains → {data['cumulative_chains']} total → {data['pairs_eliminated']:,} pairs eliminated")
+   449→
+   450→    print(f"\nVM distribution:")
+   451→    for vm, count in sorted(status["vm_distribution"].items(), key=lambda x: -x[1]):
+   452→        print(f"  {vm}: {count} chains")
+   453→
+   454→    assert status["total_chains"] >= 100, f"Expected 100+ chains, got {status['total_chains']}"
+   455→    assert status["vm_families"] >= 14, f"Expected 14+ VM families, got {status['vm_families']}"
+   456→    assert status["bridge_pairs_eliminated"] >= 4950, f"Expected 4950+ pairs, got {status['bridge_pairs_eliminated']}"
+   457→
+   458→    print("\nPHASE 2 PASS — Mainnet bootstrap sequence for 100+ chains")
+   459→

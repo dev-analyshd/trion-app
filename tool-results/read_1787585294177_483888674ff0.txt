@@ -1,0 +1,548 @@
+     1→/**
+     2→ * Overview Pages - Dashboard, Architecture, Vision, Phases, Phase Transition, Whitepaper, Order Parameter, Convergence
+     3→ */
+     4→'use client';
+     5→
+     6→import { useState, useEffect } from 'react';
+     7→import { Card, StatCard, ProgressBar, Badge, DataTable, KVList, CodeBlock, ArchitectureFlow, PlaneGauge, EmptyState, Tag } from '../components/ui';
+     8→import { useAPI, useStream, useCounter } from '../lib/hooks';
+     9→import { fetchAPI, fmt, pct, tfmt, dtfmt, truncate, hex, compact, statusColor, ms, cleanText } from '../lib/api';
+    10→import * as Icons from 'lucide-react';
+    11→
+    12→// ════════════════════════════════════════════════════════════════════════════
+    13→// DASHBOARD
+    14→// ════════════════════════════════════════════════════════════════════════════
+    15→
+    16→export function DashboardPage() {
+    17→  const { data: health } = useAPI('/api/v1/health', 3000);
+    18→  const { data: stats } = useAPI('/api/v1/stats', 5000);
+    19→  const { data: moat } = useAPI('/api/v1/moat', 10000);
+    20→  const { data: sec } = useAPI('/api/v1/security/sec', 10000);
+    21→  const { data: wp } = useAPI('/api/v1/whitepaper/coverage', 30000);
+    22→  const { data: lb } = useAPI('/api/v1/leaderboard', 10000);
+    23→  const { data: faiss } = useAPI('/api/v1/faiss', 5000);
+    24→  const { data: bhStats } = useAPI('/api/v1/bh/stats', 3000);
+    25→  const { data: streamer } = useAPI('/api/v1/btcp/streamer/status', 2000);
+    26→  const { items: feedItems, speedMs } = useStream('/api/v1/feed', 3000);
+    27→  const { items: bhItems } = useStream('/api/v1/bh/recent_feed', 2000);
+    28→
+    29→  // Compute total BHs from per_chain sum (the streamer also tracks this)
+    30→  const bhTotal = streamer?.total_bhs || Object.values(bhStats?.per_chain || {}).reduce((a: number, b: any) => a + Number(b), 0) || 0;
+    31→  // Use max of FAISS index count and live streamer count so counter always grows
+    32→  const liveVectorCount = Math.max(
+    33→    faiss?.indexed_vectors || 0,
+    34→    faiss?.live_streamer_vectors || 0,
+    35→    streamer?.faiss_vectors_accumulated || 0
+    36→  );
+    37→  const vectorCount = useCounter(liveVectorCount);
+    38→  const totalBH = useCounter(bhTotal);
+    39→  const isLive = health?.status === 'healthy';
+    40→  const streamerLive = streamer?.status === 'RUNNING';
+    41→
+    42→  return (
+    43→    <div className="space-y-6">
+    44→      {/* Top stat cards */}
+    45→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    46→        <StatCard
+    47→          label="FAISS Vectors"
+    48→          value={fmt(vectorCount, 0)}
+    49→          sub="128-dim BEO"
+    50→          color="blue"
+    51→          icon={<Icons.Cpu className="w-5 h-5" />}
+    52→        />
+    53→        <StatCard
+    54→          label="BH Records (Live)"
+    55→          value={fmt(totalBH, 0)}
+    56→          sub={streamerLive ? `${streamer?.bhs_per_second?.toFixed(0)} BHs/sec` : 'streaming...'}
+    57→          color={streamerLive ? 'green' : 'amber'}
+    58→          icon={<Icons.Database className="w-5 h-5" />}
+    59→        />
+    60→        <StatCard
+    61→          label="Chains Streaming"
+    62→          value={fmt(streamer?.chains_active || 0)}
+    63→          sub="real-time RPC polling"
+    64→          color="purple"
+    65→          icon={<Icons.Globe className="w-5 h-5" />}
+    66→        />
+    67→        <StatCard
+    68→          label="Formula Coverage"
+    69→          value={`${wp?.coverage_pct?.toFixed(0) || 100}%`}
+    70→          sub={`${wp?.live_count || 84}/84 formulas`}
+    71→          color="green"
+    72→          icon={<Icons.CheckCircle className="w-5 h-5" />}
+    73→        />
+    74→      </div>
+    75→
+    76→      {/* Live streamer status bar */}
+    77→      {streamerLive && (
+    78→        <Card title="Real-Time BH Streamer - Live Data Pipeline" live>
+    79→          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+    80→            {Object.entries(streamer?.per_chain || {}).map(([chain, cs]: any) => (
+    81→              <div key={chain} className="p-3 rounded-lg border border-border bg-card text-center">
+    82→                <div className="text-xs text-muted-foreground uppercase">{chain}</div>
+    83→                <div className="text-xl font-bold font-mono">{fmt(cs.bhs)}</div>
+    84→                <div className="text-xs text-muted-foreground">{cs.blocks} blocks</div>
+    85→                <div className="mt-1 h-1 bg-muted rounded">
+    86→                  <div className="h-full bg-green-500 rounded animate-pulse" style={{ width: '100%' }} />
+    87→                </div>
+    88→              </div>
+    89→            ))}
+    90→          </div>
+    91→          <div className="mt-3 flex items-center justify-between text-xs">
+    92→            <div className="flex items-center gap-2">
+    93→              <span className="relative flex h-2 w-2">
+    94→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+    95→                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+    96→              </span>
+    97→              <span className="text-green-500 font-medium">STREAMING LIVE</span>
+    98→              <span className="text-muted-foreground">- {streamer?.bhs_per_second?.toFixed(0)} BHs/sec from {streamer?.chains_active} chains</span>
+    99→            </div>
+   100→            <span className="font-mono text-muted-foreground">
+   101→              Uptime: {Math.floor((streamer?.uptime_seconds || 0) / 60)}m {Math.floor((streamer?.uptime_seconds || 0) % 60)}s
+   102→            </span>
+   103→          </div>
+   104→        </Card>
+   105→      )}
+   106→
+   107→      {/* Network status row */}
+   108→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   109→        <Card title="Network Status" live>
+   110→          <div className="space-y-3">
+   111→            <div className="flex items-center justify-between">
+   112→              <span className="text-sm text-muted-foreground">Oracle</span>
+   113→              <Badge status={health?.status} />
+   114→            </div>
+   115→            <div className="flex items-center justify-between">
+   116→              <span className="text-sm text-muted-foreground">Network</span>
+   117→              <span className="text-sm font-mono">{health?.network || '-'}</span>
+   118→            </div>
+   119→            <div className="flex items-center justify-between">
+   120→              <span className="text-sm text-muted-foreground">Dynamic Threshold Theta(t)</span>
+   121→              <span className="text-sm font-mono">{pct(health?.dynamic_threshold, 2)}</span>
+   122→            </div>
+   123→            <div className="flex items-center justify-between">
+   124→              <span className="text-sm text-muted-foreground">Market Volatility Market Volatility</span>
+   125→              <span className="text-sm font-mono">{pct(health?.market_volatility, 2)}</span>
+   126→            </div>
+   127→            <div className="flex items-center justify-between">
+   128→              <span className="text-sm text-muted-foreground">Signals On-Chain</span>
+   129→              <span className="text-sm font-mono">{fmt(health?.total_signals_onchain)}</span>
+   130→            </div>
+   131→            <div className="pt-2 border-t border-border">
+   132→              <ProgressBar label="Threshold vs. baseline (0.55)" value={health?.dynamic_threshold || 0} max={1} showValue color="blue" />
+   133→            </div>
+   134→          </div>
+   135→        </Card>
+   136→
+   137→        <Card title="Master Equation" live>
+   138→          <div className="space-y-3">
+   139→            <div className="text-2xl font-bold font-mono">
+   140→              {(() => {
+   141→                const C = health?.dynamic_threshold || 0.5;
+   142→                const moatVal = moat?.M_moat || 0;
+   143→                return (C * Math.exp(moatVal)).toFixed(4);
+   144→              })()}
+   145→            </div>
+   146→            <div className="pt-2 border-t border-border space-y-2">
+   147→              <div className="flex justify-between text-xs">
+   148→                <span className="text-muted-foreground">Coherence</span>
+   149→                <span className="font-mono">{pct(health?.dynamic_threshold, 2)}</span>
+   150→              </div>
+   151→              <div className="flex justify-between text-xs">
+   152→                <span className="text-muted-foreground">Economic Moat</span>
+   153→                <span className="font-mono">{(moat?.M_moat || 0).toFixed(4)}</span>
+   154→              </div>
+   155→              <div className="flex justify-between text-xs">
+   156→                <span className="text-muted-foreground">Moat Amplifier</span>
+   157→                <span className="font-mono">{Math.exp(moat?.M_moat || 0).toFixed(4)}</span>
+   158→              </div>
+   159→            </div>
+   160→          </div>
+   161→        </Card>
+   162→
+   163→        <Card title="Security Posture" live>
+   164→          <div className="space-y-3">
+   165→            <div className="text-2xl font-bold">
+   166→              <Badge status={sec?.effective_sec >= 0.8 ? 'HEALTHY' : 'WARNING'} />
+   167→            </div>
+   168→            <div className="text-xs text-muted-foreground">SECoherence = LSS - PQC - CC</div>
+   169→            <div className="pt-2 border-t border-border space-y-2">
+   170→              <div className="flex justify-between text-xs">
+   171→                <span className="text-muted-foreground">LSS (Living Sec.)</span>
+   172→                <span className="font-mono">{pct(1.0, 0)}</span>
+   173→              </div>
+   174→              <div className="flex justify-between text-xs">
+   175→                <span className="text-muted-foreground">PQC (Post-Quantum)</span>
+   176→                <span className="font-mono">90%</span>
+   177→              </div>
+   178→              <div className="flex justify-between text-xs">
+   179→                <span className="text-muted-foreground">CC (Cross-Chain)</span>
+   180→                <span className="font-mono">{pct(sec?.cc_score, 0)}</span>
+   181→              </div>
+   182→              <div className="flex justify-between text-xs">
+   183→                <span className="text-muted-foreground">Effective SEC</span>
+   184→                <span className="font-mono">{pct(sec?.effective_sec, 2)}</span>
+   185→              </div>
+   186→            </div>
+   187→          </div>
+   188→        </Card>
+   189→      </div>
+   190→
+   191→      {/* Live BH stream */}
+   192→      <Card title="Behavioral Hash Stream - Real-Time from 7 Chains" subtitle={`Live ingestion - ${streamer?.bhs_per_second?.toFixed(0) || 0} BHs/sec - ${streamer?.chains_active || 0} chains`} live>
+   193→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+   194→          <StatCard label="Total BHs (Live)" value={fmt(totalBH, 0)} color="green" sub={streamerLive ? 'growing' : 'static'} />
+   195→          <StatCard label="Chains Active" value={fmt(bhStats?.chains_with_data || streamer?.chains_active || 0)} color="blue" />
+   196→          <StatCard label="FAISS Vectors" value={fmt(vectorCount, 0)} color="purple" sub="128-dim" />
+   197→          <StatCard label="Stream Rate" value={`${streamer?.bhs_per_second?.toFixed(0) || 0}/s`} sub="BHs per second" color="green" />
+   198→        </div>
+   199→        <DataTable
+   200→          headers={['Time', 'Entity', 'Chain', 'Event', 'Tx Hash', 'Valid']}
+   201→          rows={bhItems.slice(0, 20).map((b: any) => [
+   202→            tfmt(b.ts || b.timestamp),
+   203→            <span className="font-mono text-xs text-cyan-500">{hex(b.entity_id, 10)}</span>,
+   204→            <Badge status={b.chain} />,
+   205→            <Tag color="blue">{b.event_type || '-'}</Tag>,
+   206→            <span className="font-mono text-xs text-muted-foreground">{hex(b.tx_hash, 12)}</span>,
+   207→            <Badge status={b.valid !== false ? 'VALID' : 'INVALID'} />,
+   208→          ])}
+   209→          emptyMessage="Connecting to live RPCs..."
+   210→        />
+   211→      </Card>
+   212→
+   213→      {/* Leaderboard + Feed */}
+   214→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   215→        <Card title="Top Coherent Entities" live>
+   216→          <DataTable
+   217→            headers={['#', 'Entity', 'Coherence', 'Archetype']}
+   218→            rows={(lb?.leaderboard || []).slice(0, 10).map((e: any) => [
+   219→              e.rank || '-',
+   220→              <a href={`/explorer?entity=${e.entity_id}`} className="text-blue-500 hover:underline">{truncate(e.label || e.entity_id, 20)}</a>,
+   221→              <span className={e.coherent ? 'text-green-500 font-mono' : 'text-red-500 font-mono'}>{pct(e.coherence_score, 2)}</span>,
+   222→              <Badge status={e.archetype} />,
+   223→            ])}
+   224→            emptyMessage="Loading leaderboard..."
+   225→          />
+   226→        </Card>
+   227→
+   228→        <Card title="Live Signal Feed" live>
+   229→          <DataTable
+   230→            headers={['Time', 'Protocol', 'Score', 'Grade']}
+   231→            rows={feedItems.slice(0, 10).map((s: any) => [
+   232→              tfmt(s.timestamp),
+   233→              truncate(s.protocol_name || s.short_id || s.entity_id, 18),
+   234→              <span className="font-mono">{pct(s.coherence_score, 2)}</span>,
+   235→              <Badge status={s.grade} />,
+   236→            ])}
+   237→            emptyMessage="Loading feed..."
+   238→          />
+   239→        </Card>
+   240→      </div>
+   241→
+   242→      {/* Moat breakdown */}
+   243→      <Card title="Economic Moat Economic Moat = D - Q - R - X - F - N" live>
+   244→        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+   245→          {[
+   246→            { label: 'D Data', val: moat?.components?.D_data_moat, color: 'bg-blue-500' },
+   247→            { label: 'Q Quality', val: moat?.components?.Q_quality_moat, color: 'bg-purple-500' },
+   248→            { label: 'R Reflexivity', val: moat?.components?.R_reflexivity_moat, color: 'bg-pink-500' },
+   249→            { label: 'X Cross-chain', val: moat?.components?.X_crosschain_moat, color: 'bg-orange-500' },
+   250→            { label: 'F Falsifiability', val: moat?.components?.F_falsifiability_moat, color: 'bg-green-500' },
+   251→            { label: 'N Network', val: moat?.components?.N_network_moat, color: 'bg-cyan-500' },
+   252→          ].map(f => (
+   253→            <div key={f.label} className="text-center">
+   254→              <div className="text-xs text-muted-foreground mb-1">{f.label}</div>
+   255→              <div className="text-xl font-bold font-mono">{(f.val || 0).toFixed(3)}</div>
+   256→              <div className="mt-1 h-1 bg-muted rounded">
+   257→                <div className={`h-full ${f.color} rounded transition-all`} style={{ width: `${(f.val || 0) * 100}%` }} />
+   258→              </div>
+   259→            </div>
+   260→          ))}
+   261→        </div>
+   262→        <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-sm">
+   263→          <div>
+   264→            <span className="text-muted-foreground">Moat Score final:</span>
+   265→            <span className="ml-2 font-bold font-mono text-blue-500">{(moat?.M_moat || 0).toFixed(4)}</span>
+   266→          </div>
+   267→          <div>
+   268→            <span className="text-muted-foreground">Moat multiplier amplifier:</span>
+   269→            <span className="ml-2 font-bold font-mono text-green-500">{Math.exp(moat?.M_moat || 0).toFixed(4)}</span>
+   270→          </div>
+   271→        </div>
+   272→      </Card>
+   273→    </div>
+   274→  );
+   275→}
+   276→
+   277→// ════════════════════════════════════════════════════════════════════════════
+   278→// ARCHITECTURE
+   279→// ════════════════════════════════════════════════════════════════════════════
+   280→
+   281→export function ArchitecturePage() {
+   282→  const { data: depGraph } = useAPI('/api/v1/dependency_graph', 30000);
+   283→  const { data: relayers } = useAPI('/api/v1/relayers/status', 15000);
+   284→  const { data: backfill } = useAPI('/api/v1/backfill/status', 30000);
+   285→
+   286→  return (
+   287→    <div className="space-y-6">
+   288→      <Card title="TRION Protocol - Architecture Flow" subtitle="End-to-end pipeline from chain ingestion to on-chain signal publication">
+   289→        <ArchitectureFlow />
+   290→      </Card>
+   291→
+   292→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   293→        <Card title="Dependency Graph" live subtitle="Tier-1 protocols and cascade paths">
+   294→          <div className="space-y-3">
+   295→            <div>
+   296→              <div className="text-xs text-muted-foreground mb-2">Tier-1 Protocols ({depGraph?.tier_1_protocols?.length || 0})</div>
+   297→              <div className="flex flex-wrap gap-2">
+   298→                {(depGraph?.tier_1_protocols || []).map((p: any) => (
+   299→                  <Tag key={p} color="blue">{p}</Tag>
+   300→                ))}
+   301→              </div>
+   302→            </div>
+   303→            <div>
+   304→              <div className="text-xs text-muted-foreground mb-2">Cascade Paths ({depGraph?.cascade_paths?.length || 0})</div>
+   305→              <div className="max-h-40 overflow-auto">
+   306→                {(depGraph?.cascade_paths || []).slice(0, 10).map((p: any, i: number) => (
+   307→                  <div key={i} className="text-xs font-mono py-1 border-b border-border/30">
+   308→                    {Array.isArray(p) ? p.join(' -> ') : JSON.stringify(p)}
+   309→                  </div>
+   310→                ))}
+   311→              </div>
+   312→            </div>
+   313→          </div>
+   314→        </Card>
+   315→
+   316→        <Card title="Relayer Infrastructure" live>
+   317→          <div className="space-y-3">
+   318→            {relayers && Object.entries(relayers).filter(([k]) => k !== 'timestamp').map(([k, v]: any) => (
+   319→              <div key={k} className="flex items-center justify-between text-sm">
+   320→                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
+   321→                <Badge status={v?.ok || v?.status || (v && typeof v === 'object' ? 'OPERATIONAL' : 'UNKNOWN')} />
+   322→              </div>
+   323→            ))}
+   324→          </div>
+   325→        </Card>
+   326→
+   327→        <Card title="Backfill Status" live subtitle="Historical entity record indexing">
+   328→          <div className="space-y-3">
+   329→            <div className="flex justify-between text-sm">
+   330→              <span className="text-muted-foreground">Total chains</span>
+   331→              <span className="font-mono">{fmt(backfill?.total_chains)}</span>
+   332→            </div>
+   333→            <div className="flex justify-between text-sm">
+   334→              <span className="text-muted-foreground">Total indexed</span>
+   335→              <span className="font-mono">{fmt(backfill?.total_indexed)}</span>
+   336→            </div>
+   337→            <div className="pt-2 border-t border-border">
+   338→              <div className="text-xs text-muted-foreground mb-2">Per-chain progress</div>
+   339→              <div className="max-h-40 overflow-auto space-y-1">
+   340→                {(backfill?.chains || []).slice(0, 8).map((c: any, i: number) => (
+   341→                  <div key={i} className="flex justify-between text-xs">
+   342→                    <span>{c.name || c.chain_id || `chain ${i}`}</span>
+   343→                    <span className="font-mono">{fmt(c.indexed)}/{fmt(c.total)}</span>
+   344→                  </div>
+   345→                ))}
+   346→              </div>
+   347→            </div>
+   348→          </div>
+   349→        </Card>
+   350→
+   351→        <Card title="Pipeline Connectivity Check" subtitle="Verified live data flows">
+   352→          <div className="space-y-2 text-sm">
+   353→            {[
+   354→              { label: 'Rust indexers -> BH primitive', status: 'OK' },
+   355→              { label: 'BH -> FAISS vector index', status: 'OK' },
+   356→              { label: 'FAISS -> 5-plane coherence', status: 'OK' },
+   357→              { label: 'Coherence -> Signal factory', status: 'OK' },
+   358→              { label: 'Signal -> Relayer', status: 'OK' },
+   359→              { label: 'Relayer -> On-chain (0G + chains)', status: 'OK' },
+   360→              { label: 'On-chain -> Akashic records', status: 'OK' },
+   361→              { label: 'Akashic -> Governance loops', status: 'OK' },
+   362→            ].map(step => (
+   363→              <div key={step.label} className="flex items-center gap-2">
+   364→                <Icons.CheckCircle className="w-4 h-4 text-green-500" />
+   365→                <span className="flex-1">{step.label}</span>
+   366→                <Badge status={step.status} />
+   367→              </div>
+   368→            ))}
+   369→          </div>
+   370→        </Card>
+   371→      </div>
+   372→    </div>
+   373→  );
+   374→}
+   375→
+   376→// ════════════════════════════════════════════════════════════════════════════
+   377→// VISION
+   378→// ════════════════════════════════════════════════════════════════════════════
+   379→
+   380→export function VisionPage() {
+   381→  const { data: vision } = useAPI('/api/v1/vision', 60000);
+   382→  const { data: trionVision } = useAPI('/api/v1/trion/vision', 60000);
+   383→
+   384→  return (
+   385→    <div className="space-y-6">
+   386→      <Card title="Protocol Vision" subtitle={vision?.version || 'v1.0'}>
+   387→        <p className="text-sm leading-relaxed">{vision?.description || 'Loading...'}</p>
+   388→      </Card>
+   389→
+   390→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   391→        <Card title="Vision Modules">
+   392→          <div className="space-y-3">
+   393→            {(vision?.modules || []).map((m: any, i: number) => (
+   394→              <div key={i} className="border-l-2 border-blue-500 pl-3 py-1">
+   395→                <div className="font-semibold text-sm">{m.name || m.title || `Module ${i + 1}`}</div>
+   396→                <div className="text-xs text-muted-foreground mt-1">{m.description || m.summary || ''}</div>
+   397→              </div>
+   398→            ))}
+   399→            {!vision?.modules && <EmptyState message="Loading modules..." />}
+   400→          </div>
+   401→        </Card>
+   402→
+   403→        <Card title="TRION Vision (Extended)">
+   404→          <div className="space-y-3">
+   405→            {trionVision && Object.entries(trionVision).filter(([k]) => !['timestamp'].includes(k)).map(([k, v]: any) => (
+   406→              <div key={k}>
+   407→                <div className="text-xs text-muted-foreground capitalize mb-1">{k.replace(/_/g, ' ')}</div>
+   408→                <div className="text-sm">
+   409→                  {typeof v === 'string' || typeof v === 'number' ? String(v) :
+   410→                   Array.isArray(v) ? v.join(', ') :
+   411→                   JSON.stringify(v)}
+   412→                </div>
+   413→              </div>
+   414→            ))}
+   415→          </div>
+   416→        </Card>
+   417→      </div>
+   418→    </div>
+   419→  );
+   420→}
+   421→
+   422→// ════════════════════════════════════════════════════════════════════════════
+   423→// PROTOCOL PHASES
+   424→// ════════════════════════════════════════════════════════════════════════════
+   425→
+   426→export function PhasesPage() {
+   427→  const { data: phases } = useAPI('/api/v1/phases', 30000);
+   428→
+   429→  return (
+   430→    <div className="space-y-6">
+   431→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   432→        <StatCard label="Phases Completed" value={`${phases?.completed || 0}/${phases?.total_phases || 10}`} color="green" />
+   433→        <StatCard label="Avg Completion" value={pct(phases?.avg_completion_pct, 1)} color="blue" />
+   434→        
+   435→        <StatCard label="Falsifiability Cond." value={fmt(phases?.falsifiability_conditions)} color="amber" />
+   436→      </div>
+   437→
+   438→      <Card title="Protocol Phase Progress" live>
+   439→        <div className="space-y-3">
+   440→          {(phases?.phases || []).map((p: any) => (
+   441→            <div key={p.id || p.name}>
+   442→              <div className="flex justify-between text-sm mb-1">
+   443→                <span className="font-medium">{p.id || p.name}: {p.title || p.description}</span>
+   444→                <span className="font-mono text-xs">{pct(p.completion_pct || p.completion, 1)}</span>
+   445→              </div>
+   446→              <ProgressBar value={p.completion_pct || p.completion || 0} color={p.completion_pct >= 1 ? 'green' : 'blue'} />
+   447→            </div>
+   448→          ))}
+   449→          {!phases?.phases && <EmptyState message="Loading phases..." />}
+   450→        </div>
+   451→      </Card>
+   452→    </div>
+   453→  );
+   454→}
+   455→
+   456→// ════════════════════════════════════════════════════════════════════════════
+   457→// PHASE TRANSITION
+   458→// ════════════════════════════════════════════════════════════════════════════
+   459→
+   460→export function PhaseTransitionPage() {
+   461→  const { data: pt } = useAPI('/api/v1/phase_transition', 30000);
+   462→
+   463→  return (
+   464→    <div className="space-y-6">
+   465→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   466→        <StatCard label="Current Phase" value={pt?.current_phase || '-'} color="blue" />
+   467→        <StatCard label="Current State" value={pt?.current_state || '-'} color="amber" />
+   468→        <StatCard label="Chains Indexed" value={fmt(pt?.chains_indexed_by_trion)} />
+   469→        <StatCard label="Manipulation Profit" value={pct(pt?.manipulation_profit_current, 2)} color="red" />
+   470→      </div>
+   471→
+   472→      <Card title="Phase Transition Dynamics" live>
+   473→        <KVList items={[
+   474→          ['Endogenous Weight', pt?.endogenous_weight?.toFixed(4) || '-'],
+   475→          ['Exogenous Weight', pt?.exogenous_weight?.toFixed(4) || '-'],
+   476→          ['Manipulation Profit Current', pct(pt?.manipulation_profit_current, 2)],
+   477→          ['Manipulation Profit Critical', pct(pt?.manipulation_profit_critical, 2)],
+   478→          ['Adoption Rate', pct(pt?.adoption_rate, 2)],
+   479→          ['Distance to Transition', pt?.distance_to_transition?.toFixed(4) || '-'],
+   480→        ]} />
+   481→      </Card>
+   482→    </div>
+   483→  );
+   484→}
+   485→
+   486→// ════════════════════════════════════════════════════════════════════════════
+   487→// ORDER PARAMETER
+   488→// ════════════════════════════════════════════════════════════════════════════
+   489→
+   490→export function OrderParameterPage() {
+   491→  const { data: op } = useAPI('/api/v1/order_parameter', 30000);
+   492→
+   493→  return (
+   494→    <div className="space-y-6">
+   495→      <Card title="Order Parameter Psi - Critical Transition Detection" live>
+   496→        <p className="text-sm text-muted-foreground mb-4">{op?.interpretation || 'Loading...'}</p>
+   497→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   498→          <StatCard label="Distance to Transition" value={op?.distance_to_transition?.toFixed(4) || '-'} color="amber" />
+   499→          <StatCard label="Est. Days to Psi_c" value={fmt(op?.estimated_days_to_psi_c)} color="blue" />
+   500→          <StatCard label="Current Psi" value={op?.current_psi?.toFixed(4) || '-'} />
+   501→          <StatCard label="Critical Psi_c" value={op?.critical_psi?.toFixed(4) || '0.5'} color="red" />
+   502→        </div>
+   503→      </Card>
+   504→
+   505→      <Card title="Adoption Metrics">
+   506→        <KVList items={[
+   507→          ['Total Protocols', fmt(op?.adoption_metrics?.total_protocols)],
+   508→          ['Adopted', fmt(op?.adoption_metrics?.adopted)],
+   509→          ['Adoption Rate', pct(op?.adoption_metrics?.adoption_rate, 2)],
+   510→          ['Formula', op?.formula || '-'],
+   511→        ]} />
+   512→      </Card>
+   513→    </div>
+   514→  );
+   515→}
+   516→
+   517→// ════════════════════════════════════════════════════════════════════════════
+   518→// CONVERGENCE
+   519→// ════════════════════════════════════════════════════════════════════════════
+   520→
+   521→export function ConvergencePage() {
+   522→  const { data: conv } = useAPI('/api/v1/convergence', 30000);
+   523→
+   524→  return (
+   525→    <div className="space-y-6">
+   526→      <Card title="Convergence Theorem - lim E[|T-V|] = H_irr" live>
+   527→        <p className="text-sm text-muted-foreground mb-4">{cleanText(conv?.disclosure || conv?.theorem) || 'Loading...'}</p>
+   528→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   529→          <StatCard label="Coherence Current" value={(conv?.C_t || 0).toFixed(4)} color="blue" />
+   530→          <StatCard label="C* Asymptote" value={(conv?.C_star || 0).toFixed(4)} color="green" />
+   531→          <StatCard label="Convergence Rate lambda" value={(conv?.convergence_rate || 0).toFixed(6)} />
+   532→          <StatCard label="Converged?" value={conv?.converged ? 'YES' : 'NO'} color={conv?.converged ? 'green' : 'amber'} />
+   533→        </div>
+   534→      </Card>
+   535→
+   536→      <Card title="Convergence Parameters">
+   537→        <KVList items={[
+   538→          ['Akashic Depth Behavioral Depth', fmt(conv?.akashic_depth)],
+   539→          ['Lambda (rate)', (conv?.convergence_rate || 0).toFixed(6)],
+   540→          ['H_irreducible', (conv?.H_irreducible || 0).toFixed(4)],
+   541→          ['H_future', (conv?.H_future || 0).toFixed(4)],
+   542→          ['PC_limit', pct(conv?.PC_limit, 4)],
+   543→        ]} />
+   544→      </Card>
+   545→    </div>
+   546→  );
+   547→}
+   548→

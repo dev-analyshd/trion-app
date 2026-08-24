@@ -1,0 +1,763 @@
+     1→     1→"""
+     2→     2→TRION BTCP — Integration Layer
+     3→     3→==============================
+     4→     4→
+     5→     5→Connects ZK proof system and VM adapters to the existing BTCP infrastructure.
+     6→     6→
+     7→     7→Components:
+     8→     8→  1. BTCPOrchestrator — High-level cross-VM BTCP coordinator
+     9→     9→  2. PrivacyRouter — Routes intents through ZK circuits for privacy
+    10→    10→  3. CrossVMGateway — Unified gateway for all VM adapter operations
+    11→    11→  4. ProofAggregator — Collects and verifies proofs across chains
+    12→    12→
+    13→    13→Whitepaper reference: L7 BTCP Cross-Chain Protocol
+    14→    14→"""
+    15→    15→
+    16→    16→import os
+    17→    17→import sys
+    18→    18→import json
+    19→    19→import time
+    20→    20→import hashlib
+    21→    21→from dataclasses import dataclass, field, asdict
+    22→    22→from typing import Dict, List, Optional, Tuple, Any
+    23→    23→from enum import IntEnum
+    24→    24→
+    25→    25→# Add workspace to path (go up from core/btcp/ to workspace root)
+    26→    26→_workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    27→    27→sys.path.insert(0, _workspace_root)
+    28→    28→
+    29→    29→from zk import (
+    30→    30→    ZKProofSystem,
+    31→    31→    IntentWitness,
+    32→    32→    ComplementarityWitness,
+    33→    33→    BehavioralCredentialWitness,
+    34→    34→    TravelRuleWitness,
+    35→    35→    IAPShareWitness,
+    36→    36→    CircuitType,
+    37→    37→)
+    38→    38→from adapters import (
+    39→    39→    VMAdapterFactory,
+    40→    40→    VMType,
+    41→    41→    BTCPIntent,
+    42→    42→    BTCPProof,
+    43→    43→    GasEstimate,
+    44→    44→    CHAIN_VM_MAP,
+    45→    45→)
+    46→    46→
+    47→    47→
+    48→    48→# ── Enumerations ────────────────────────────────────────────────────────────
+    49→    49→
+    50→    50→class PrivacyLevel(IntEnum):
+    51→    51→    """Privacy levels for BTCP operations."""
+    52→    52→    PUBLIC = 0          # No ZK proofs, all data visible
+    53→    53→    BASIC = 1           # Intent commitment only
+    54→    54→    STANDARD = 2        # Intent + complementarity proofs
+    55→    55→    COMPLIANT = 3       # Standard + travel rule compliance
+    56→    56→    FULL = 4            # All proofs including behavioral credential
+    57→    57→
+    58→    58→
+    59→    59→class RouteStatus(IntEnum):
+    60→    60→    """Status of a BTCP route."""
+    61→    61→    PENDING = 0
+    62→    62→    INTENT_CREATED = 1
+    63→    63→    PROOFS_GENERATED = 2
+    64→    64→    SOURCE_EXECUTED = 3
+    65→    65→    DEST_EXECUTED = 4
+    66→    66→    COMPLETED = 5
+    67→    67→    FAILED = -1
+    68→    68→    TIMEOUT = -2
+    69→    69→
+    70→    70→
+    71→    71→# ── Data Structures ─────────────────────────────────────────────────────────
+    72→    72→
+    73→    73→@dataclass
+    74→    74→class BTCPRoute:
+    75→    75→    """Complete BTCP route with all components."""
+    76→    76→    route_id: str = ""
+    77→    77→    intent: Optional[BTCPIntent] = None
+    78→    78→    source_vm: VMType = VMType.EVM
+    79→    79→    dest_vm: VMType = VMType.EVM
+    80→    80→    source_encoded: str = ""
+    81→    81→    dest_encoded: str = ""
+    82→    82→    source_gas: Optional[GasEstimate] = None
+    83→    83→    dest_gas: Optional[GasEstimate] = None
+    84→    84→    proofs: Dict[str, Any] = field(default_factory=dict)
+    85→    85→    privacy_level: PrivacyLevel = PrivacyLevel.BASIC
+    86→    86→    status: RouteStatus = RouteStatus.PENDING
+    87→    87→    total_fee: float = 0.0
+    88→    88→    # BTCP zero-bridge invariant: assets are NEVER moved across chains.
+    89→    89→    # Value stays in escrow on the source chain and is only released/reverted
+    90→    90→    # locally after the behavioral proof is verified.  This field is always
+    91→    91→    # False for a correctly-constructed BTCP route — the test suite asserts
+    92→    92→    # this invariant explicitly.
+    93→    93→    assets_bridged: bool = False
+    94→    94→    btcp_score: float = 0.0
+    95→    95→    route_type: str = "SINGLE_CHAIN"
+    96→    96→    created_at: float = field(default_factory=time.time)
+    97→    97→    updated_at: float = field(default_factory=time.time)
+    98→    98→    
+    99→    99→    def to_dict(self) -> Dict[str, Any]:
+   100→   100→        d = asdict(self)
+   101→   101→        d['source_vm'] = self.source_vm.name
+   102→   102→        d['dest_vm'] = self.dest_vm.name
+   103→   103→        d['privacy_level'] = self.privacy_level.name
+   104→   104→        d['status'] = self.status.name
+   105→   105→        d['route_type'] = self.route_type
+   106→   106→        d['assets_bridged'] = self.assets_bridged
+   107→   107→        d['btcp_score'] = self.btcp_score
+   108→   108→        if self.intent:
+   109→   109→            d['intent'] = self.intent.to_dict()
+   110→   110→        if self.source_gas:
+   111→   111→            d['source_gas'] = asdict(self.source_gas)
+   112→   112→        if self.dest_gas:
+   113→   113→            d['dest_gas'] = asdict(self.dest_gas)
+   114→   114→        return d
+   115→   115→
+   116→   116→
+   117→   117→@dataclass
+   118→   118→class OrchestrationResult:
+   119→   119→    """Result of a BTCP orchestration."""
+   120→   120→    success: bool
+   121→   121→    route: Optional[BTCPRoute] = None
+   122→   122→    proofs_generated: List[str] = field(default_factory=list)
+   123→   123→    errors: List[str] = field(default_factory=list)
+   124→   124→    execution_time_ms: float = 0.0
+   125→   125→    
+   126→   126→    def to_dict(self) -> Dict[str, Any]:
+   127→   127→        return {
+   128→   128→            "success": self.success,
+   129→   129→            "route": self.route.to_dict() if self.route else None,
+   130→   130→            "proofs_generated": self.proofs_generated,
+   131→   131→            "errors": self.errors,
+   132→   132→            "execution_time_ms": round(self.execution_time_ms, 2),
+   133→   133→        }
+   134→   134→
+   135→   135→
+   136→   136→# ── Privacy Router ──────────────────────────────────────────────────────────
+   137→   137→
+   138→   138→class PrivacyRouter:
+   139→   139→    """
+   140→   140→    Routes BTCP intents through appropriate ZK circuits based on privacy level.
+   141→   141→    
+   142→   142→    Generates the correct set of zero-knowledge proofs for each operation.
+   143→   143→    """
+   144→   144→    
+   145→   145→    def __init__(self):
+   146→   146→        self.zk = ZKProofSystem()
+   147→   147→    
+   148→   148→    def generate_proofs(
+   149→   149→        self,
+   150→   150→        intent: BTCPIntent,
+   151→   151→        privacy_level: PrivacyLevel,
+   152→   152→        behavioral_data: Optional[Dict[str, Any]] = None,
+   153→   153→    ) -> Dict[str, Any]:
+   154→   154→        """
+   155→   155→        Generate ZK proofs appropriate for the requested privacy level.
+   156→   156→        
+   157→   157→        Returns a dict mapping circuit names to their proofs.
+   158→   158→        """
+   159→   159→        proofs = {}
+   160→   160→        
+   161→   161→        # Level 1+: Always generate intent commitment
+   162→   162→        if privacy_level >= PrivacyLevel.BASIC:
+   163→   163→            intent_witness = IntentWitness(
+   164→   164→                entity_id=intent.source_address,
+   165→   165→                intent_type=intent.intent_type,
+   166→   166→                amount=intent.amount,
+   167→   167→                source_chain=intent.source_chain,
+   168→   168→                dest_chain=intent.dest_chain,
+   169→   169→                deadline=intent.deadline,
+   170→   170→                nonce=intent.nonce.to_bytes(32, 'big'),
+   171→   171→            )
+   172→   172→            proof = self.zk.generate_intent(intent_witness)
+   173→   173→            proofs["intent_commitment"] = proof.to_dict()
+   174→   174→        
+   175→   175→        # Level 2+: Add complementarity proof
+   176→   176→        if privacy_level >= PrivacyLevel.STANDARD:
+   177→   177→            # Generate dummy complementarity proof for routing
+   178→   178→            import secrets
+   179→   179→            sense = secrets.token_bytes(32)
+   180→   180→            antisense = bytes([b ^ 0xFF for b in sense])  # Perfect complement
+   181→   181→            comp_witness = ComplementarityWitness(
+   182→   182→                sense_strand=sense,
+   183→   183→                antisense_strand=antisense,
+   184→   184→                entity_id=intent.source_address,
+   185→   185→                block_number=18000000,
+   186→   186→            )
+   187→   187→            proof = self.zk.generate_complementarity(comp_witness)
+   188→   188→            proofs["complementarity"] = proof.to_dict()
+   189→   189→        
+   190→   190→        # Level 3+: Add travel rule compliance
+   191→   191→        if privacy_level >= PrivacyLevel.COMPLIANT:
+   192→   192→            tr_witness = TravelRuleWitness(
+   193→   193→                originator_id=intent.source_address,
+   194→   194→                beneficiary_id=intent.dest_address,
+   195→   195→                amount=intent.amount,
+   196→   196→                asset_address=intent.asset,
+   197→   197→                originator_verified=True,
+   198→   198→                beneficiary_verified=True,
+   199→   199→            )
+   200→   200→            proof = self.zk.generate_travel_rule(tr_witness)
+   201→   201→            proofs["travel_rule"] = proof.to_dict()
+   202→   202→        
+   203→   203→        # Level 4+: Add behavioral credential
+   204→   204→        if privacy_level >= PrivacyLevel.FULL and behavioral_data:
+   205→   205→            bc_witness = BehavioralCredentialWitness(
+   206→   206→                entity_id=intent.source_address,
+   207→   207→                coherence_score=behavioral_data.get("coherence", 0.75),
+   208→   208→                manipulation_fingerprint=behavioral_data.get("manipulation", 0.15),
+   209→   209→                liquidity_score=behavioral_data.get("liquidity", 0.80),
+   210→   210→                akashic_depth=behavioral_data.get("depth", 500.0),
+   211→   211→                threshold_coherence=0.55,
+   212→   212→                threshold_manipulation=0.30,
+   213→   213→            )
+   214→   214→            proof = self.zk.generate_behavioral_credential(bc_witness)
+   215→   215→            proofs["behavioral_credential"] = proof.to_dict()
+   216→   216→        
+   217→   217→        # Always add IAP share proof for gas fairness
+   218→   218→        iap_witness = IAPShareWitness(
+   219→   219→            entity_id=intent.source_address,
+   220→   220→            total_gas=1_000_000,
+   221→   221→            entity_gas=151000,
+   222→   222→            total_btcp_fee=int(0.01 * 10**18),
+   223→   223→            entity_share=int(0.0015 * 10**18),
+   224→   224→            num_participants=10,
+   225→   225→        )
+   226→   226→        proof = self.zk.generate_iap_share(iap_witness)
+   227→   227→        proofs["iap_share"] = proof.to_dict()
+   228→   228→        
+   229→   229→        return proofs
+   230→   230→    
+   231→   231→    def verify_proofs(self, proofs: Dict[str, Any]) -> Tuple[bool, List[str]]:
+   232→   232→        """Verify all proofs in a set."""
+   233→   233→        all_valid = True
+   234→   234→        errors = []
+   235→   235→        
+   236→   236→        from zk import ZKProof, CircuitType
+   237→   237→        
+   238→   238→        circuit_map = {
+   239→   239→            "intent_commitment": CircuitType.INTENT_COMMITMENT,
+   240→   240→            "complementarity": CircuitType.COMPLEMENTARITY,
+   241→   241→            "travel_rule": CircuitType.TRAVEL_RULE,
+   242→   242→            "behavioral_credential": CircuitType.BEHAVIORAL_CREDENTIAL,
+   243→   243→            "iap_share": CircuitType.IAP_SHARE,
+   244→   244→        }
+   245→   245→        
+   246→   246→        for name, proof_data in proofs.items():
+   247→   247→            if name not in circuit_map:
+   248→   248→                continue
+   249→   249→            
+   250→   250→            # Reconstruct ZKProof from dict
+   251→   251→            circuit_type = circuit_map[name]
+   252→   252→            proof = ZKProof(
+   253→   253→                circuit_type=circuit_type,
+   254→   254→                proof_data=proof_data.get("proof_data", {}),
+   255→   255→                public_inputs=proof_data.get("public_inputs", {}),
+   256→   256→                commitment=proof_data.get("commitment", ""),
+   257→   257→                timestamp=proof_data.get("timestamp", 0),
+   258→   258→                version=proof_data.get("version", "1.0.0"),
+   259→   259→            )
+   260→   260→            
+   261→   261→            if not self.zk.verify(proof):
+   262→   262→                all_valid = False
+   263→   263→                errors.append(f"Invalid proof: {name}")
+   264→   264→        
+   265→   265→        return all_valid, errors
+   266→   266→
+   267→   267→
+   268→   268→# ── Cross-VM Gateway ────────────────────────────────────────────────────────
+   269→   269→
+   270→   270→class CrossVMGateway:
+   271→   271→    """
+   272→   272→    Unified gateway for all cross-VM operations.
+   273→   273→    
+   274→   274→    Provides a single interface for:
+   275→   275→      - Encoding intents for any VM
+   276→   276→      - Estimating gas across VMs
+   277→   277→      - Validating addresses for any chain
+   278→   278→      - Routing intents to appropriate adapters
+   279→   279→    """
+   280→   280→    
+   281→   281→    def __init__(self):
+   282→   282→        self.factory = VMAdapterFactory
+   283→   283→    
+   284→   284→    def encode_for_chain(self, intent: BTCPIntent, chain_id: int) -> str:
+   285→   285→        """Encode an intent for a specific chain."""
+   286→   286→        adapter = self.factory.get_by_chain_id(chain_id)
+   287→   287→        if adapter is None:
+   288→   288→            raise ValueError(f"No adapter for chain_id: {chain_id}")
+   289→   289→        return adapter.encode_intent(intent)
+   290→   290→    
+   291→   291→    def estimate_chain_gas(self, intent: BTCPIntent, chain_id: int) -> GasEstimate:
+   292→   292→        """Estimate gas for executing on a specific chain."""
+   293→   293→        adapter = self.factory.get_by_chain_id(chain_id)
+   294→   294→        if adapter is None:
+   295→   295→            raise ValueError(f"No adapter for chain_id: {chain_id}")
+   296→   296→        return adapter.estimate_gas(intent)
+   297→   297→    
+   298→   298→    def validate_chain_address(self, address: str, chain_id: int) -> bool:
+   299→   299→        """Validate an address format for a specific chain."""
+   300→   300→        adapter = self.factory.get_by_chain_id(chain_id)
+   301→   301→        if adapter is None:
+   302→   302→            return False
+   303→   303→        return adapter.validate_address(address)
+   304→   304→    
+   305→   305→    def format_chain_address(self, address: str, chain_id: int) -> str:
+   306→   306→        """Format an address for a specific chain."""
+   307→   307→        adapter = self.factory.get_by_chain_id(chain_id)
+   308→   308→        if adapter is None:
+   309→   309→            return address
+   310→   310→        return adapter.format_address(address)
+   311→   311→    
+   312→   312→    def get_vm_type(self, chain_id: int) -> VMType:
+   313→   313→        """Get the VM type for a given chain."""
+   314→   314→        return CHAIN_VM_MAP.get(chain_id, VMType.EVM)
+   315→   315→    
+   316→   316→    def get_supported_chains(self) -> List[Dict[str, Any]]:
+   317→   317→        """Get all supported chains and their VM types."""
+   318→   318→        chains = []
+   319→   319→        for chain_id, vm_type in sorted(CHAIN_VM_MAP.items()):
+   320→   320→            adapter = self.factory.get_by_vm_type(vm_type)
+   321→   321→            chains.append({
+   322→   322→                "chain_id": chain_id,
+   323→   323→                "vm_type": vm_type.name,
+   324→   324→                "vm_name": adapter.name if adapter else "Unknown",
+   325→   325→                "native_token": adapter.native_token if adapter else "UNKNOWN",
+   326→   326→            })
+   327→   327→        return chains
+   328→   328→    
+   329→   329→    def list_vms(self) -> List[Dict[str, Any]]:
+   330→   330→        """List all supported VM types."""
+   331→   331→        return self.factory.list_adapters()
+   332→   332→
+   333→   333→
+   334→   334→# ── BTCP Orchestrator ───────────────────────────────────────────────────────
+   335→   335→
+   336→   336→class BTCPOrchestrator:
+   337→   337→    """
+   338→   338→    High-level BTCP orchestration coordinator.
+   339→   339→    
+   340→   340→    Ties together:
+   341→   341→      - Intent creation and validation
+   342→   342→      - VM adapter encoding
+   343→   343→      - ZK proof generation
+   344→   344→      - Gas estimation
+   345→   345→      - Route tracking and status management
+   346→   346→    
+   347→   347→    This is the main entry point for BTCP operations in the TRION engine.
+   348→   348→    """
+   349→   349→    
+   350→   350→    def __init__(self):
+   351→   351→        self.privacy_router = PrivacyRouter()
+   352→   352→        self.gateway = CrossVMGateway()
+   353→   353→        self._routes: Dict[str, BTCPRoute] = {}
+   354→   354→    
+   355→   355→    def create_route(
+   356→   356→        self,
+   357→   357→        source_chain: int,
+   358→   358→        dest_chain: int,
+   359→   359→        source_address: str,
+   360→   360→        dest_address: str,
+   361→   361→        amount: int,
+   362→   362→        asset: str,
+   363→   363→        intent_type: str = "TRANSFER",
+   364→   364→        privacy_level: PrivacyLevel = PrivacyLevel.BASIC,
+   365→   365→        deadline_offset: int = 3600,
+   366→   366→        behavioral_data: Optional[Dict[str, Any]] = None,
+   367→   367→    ) -> OrchestrationResult:
+   368→   368→        """
+   369→   369→        Create and orchestrate a complete BTCP route.
+   370→   370→        
+   371→   371→        Steps:
+   372→   372→          1. Validate addresses for both chains
+   373→   373→          2. Create standardized BTCPIntent
+   374→   374→          3. Encode intent for source and destination VMs
+   375→   375→          4. Estimate gas for both chains
+   376→   376→          5. Generate appropriate ZK proofs
+   377→   377→          6. Track route status
+   378→   378→        """
+   379→   379→        start_time = time.perf_counter()
+   380→   380→        errors = []
+   381→   381→        
+   382→   382→        # Step 1: Validate addresses
+   383→   383→        if not self.gateway.validate_chain_address(source_address, source_chain):
+   384→   384→            # Try formatting first
+   385→   385→            source_address = self.gateway.format_chain_address(source_address, source_chain)
+   386→   386→            if not self.gateway.validate_chain_address(source_address, source_chain):
+   387→   387→                errors.append(f"Invalid source address for chain {source_chain}")
+   388→   388→        
+   389→   389→        if not self.gateway.validate_chain_address(dest_address, dest_chain):
+   390→   390→            dest_address = self.gateway.format_chain_address(dest_address, dest_chain)
+   391→   391→            if not self.gateway.validate_chain_address(dest_address, dest_chain):
+   392→   392→                errors.append(f"Invalid dest address for chain {dest_chain}")
+   393→   393→        
+   394→   394→        # Step 2: Create intent
+   395→   395→        intent_id = hashlib.sha3_256(
+   396→   396→            f"{source_chain}:{dest_chain}:{source_address}:{dest_address}:{amount}:{time.time()}".encode()
+   397→   397→        ).hexdigest()[:16]
+   398→   398→        
+   399→   399→        intent = BTCPIntent(
+   400→   400→            intent_id=f"btcp_{intent_id}",
+   401→   401→            source_chain=source_chain,
+   402→   402→            dest_chain=dest_chain,
+   403→   403→            source_address=source_address,
+   404→   404→            dest_address=dest_address,
+   405→   405→            amount=amount,
+   406→   406→            asset=asset,
+   407→   407→            intent_type=intent_type,
+   408→   408→            deadline=int(time.time()) + deadline_offset,
+   409→   409→            nonce=int(time.time() * 1000) % (2**32),
+   410→   410→        )
+   411→   411→        
+   412→   412→        # Step 3: Encode for both VMs
+   413→   413→        source_vm = self.gateway.get_vm_type(source_chain)
+   414→   414→        dest_vm = self.gateway.get_vm_type(dest_chain)
+   415→   415→        
+   416→   416→        try:
+   417→   417→            source_encoded = self.gateway.encode_for_chain(intent, source_chain)
+   418→   418→        except Exception as e:
+   419→   419→            source_encoded = ""
+   420→   420→            errors.append(f"Source encoding failed: {str(e)[:80]}")
+   421→   421→        
+   422→   422→        try:
+   423→   423→            dest_encoded = self.gateway.encode_for_chain(intent, dest_chain)
+   424→   424→        except Exception as e:
+   425→   425→            dest_encoded = ""
+   426→   426→            errors.append(f"Dest encoding failed: {str(e)[:80]}")
+   427→   427→        
+   428→   428→        # Step 4: Estimate gas
+   429→   429→        try:
+   430→   430→            source_gas = self.gateway.estimate_chain_gas(intent, source_chain)
+   431→   431→        except Exception as e:
+   432→   432→            source_gas = None
+   433→   433→            errors.append(f"Source gas estimate failed: {str(e)[:80]}")
+   434→   434→        
+   435→   435→        try:
+   436→   436→            dest_gas = self.gateway.estimate_chain_gas(intent, dest_chain)
+   437→   437→        except Exception as e:
+   438→   438→            dest_gas = None
+   439→   439→            errors.append(f"Dest gas estimate failed: {str(e)[:80]}")
+   440→   440→        
+   441→   441→        total_fee = 0.0
+   442→   442→        if source_gas:
+   443→   443→            total_fee += source_gas.estimated_fee
+   444→   444→        if dest_gas:
+   445→   445→            total_fee += dest_gas.estimated_fee
+   446→   446→        
+   447→   447→        # Step 5: Generate ZK proofs
+   448→   448→        try:
+   449→   449→            proofs = self.privacy_router.generate_proofs(intent, privacy_level, behavioral_data)
+   450→   450→            proof_names = list(proofs.keys())
+   451→   451→        except Exception as e:
+   452→   452→            proofs = {}
+   453→   453→            proof_names = []
+   454→   454→            errors.append(f"Proof generation failed: {str(e)[:80]}")
+   455→   455→        
+   456→   456→        # Step 6: Create and track route
+   457→   457→        route = BTCPRoute(
+   458→   458→            route_id=f"route_{intent_id}",
+   459→   459→            intent=intent,
+   460→   460→            source_vm=source_vm,
+   461→   461→            dest_vm=dest_vm,
+   462→   462→            source_encoded=source_encoded,
+   463→   463→            dest_encoded=dest_encoded,
+   464→   464→            source_gas=source_gas,
+   465→   465→            dest_gas=dest_gas,
+   466→   466→            proofs=proofs,
+   467→   467→            privacy_level=privacy_level,
+   468→   468→            status=RouteStatus.PROOFS_GENERATED if proofs else RouteStatus.INTENT_CREATED,
+   469→   469→            total_fee=total_fee,
+   470→   470→        )
+   471→   471→        
+   472→   472→        self._routes[route.route_id] = route
+   473→   473→        
+   474→   474→        execution_time = (time.perf_counter() - start_time) * 1000
+   475→   475→        
+   476→   476→        success = len(errors) == 0
+   477→   477→        
+   478→   478→        return OrchestrationResult(
+   479→   479→            success=success,
+   480→   480→            route=route,
+   481→   481→            proofs_generated=proof_names,
+   482→   482→            errors=errors,
+   483→   483→            execution_time_ms=execution_time,
+   484→   484→        )
+   485→   485→    
+   486→   486→    def get_route(self, route_id: str) -> Optional[BTCPRoute]:
+   487→   487→        """Get a route by ID."""
+   488→   488→        return self._routes.get(route_id)
+   489→   489→    
+   490→   490→    def update_route_status(self, route_id: str, status: RouteStatus) -> bool:
+   491→   491→        """Update the status of a route."""
+   492→   492→        route = self._routes.get(route_id)
+   493→   493→        if route is None:
+   494→   494→            return False
+   495→   495→        route.status = status
+   496→   496→        route.updated_at = time.time()
+   497→   497→        return True
+   498→   498→    
+   499→   499→    def list_routes(self) -> List[Dict[str, Any]]:
+   500→   500→        """List all tracked routes."""
+   501→   501→        return [
+   502→   502→            {
+   503→   503→                "route_id": r.route_id,
+   504→   504→                "source_chain": r.intent.source_chain if r.intent else 0,
+   505→   505→                "dest_chain": r.intent.dest_chain if r.intent else 0,
+   506→   506→                "source_vm": r.source_vm.name,
+   507→   507→                "dest_vm": r.dest_vm.name,
+   508→   508→                "status": r.status.name,
+   509→   509→                "privacy_level": r.privacy_level.name,
+   510→   510→                "total_fee": r.total_fee,
+   511→   511→                "created_at": r.created_at,
+   512→   512→            }
+   513→   513→            for r in self._routes.values()
+   514→   514→        ]
+   515→   515→    
+   516→   516→    def verify_route_proofs(self, route_id: str) -> Tuple[bool, List[str]]:
+   517→   517→        """Verify all proofs for a route."""
+   518→   518→        route = self._routes.get(route_id)
+   519→   519→        if route is None:
+   520→   520→            return False, ["Route not found"]
+   521→   521→        
+   522→   522→        return self.privacy_router.verify_proofs(route.proofs)
+   523→   523→
+   524→   524→
+   525→   525→# ── Proof Aggregator ────────────────────────────────────────────────────────
+   526→   526→
+   527→   527→class ProofAggregator:
+   528→   528→    """
+   529→   529→    Collects and aggregates proofs across multiple chains.
+   530→   530→    
+   531→   531→    Provides:
+   532→   532→      - Multi-chain proof aggregation
+   533→   533→      - Merkle root of all proofs
+   534→   534→      - Aggregate verification
+   535→   535→      - Proof availability tracking
+   536→   536→    """
+   537→   537→    
+   538→   538→    def __init__(self):
+   539→   539→        self._proofs: Dict[str, Dict[str, Any]] = {}
+   540→   540→        self._merkle_leaves: List[bytes] = []
+   541→   541→    
+   542→   542→    def add_proof(self, proof_id: str, proof_data: Dict[str, Any], chain_id: int) -> str:
+   543→   543→        """Add a proof to the aggregator."""
+   544→   544→        leaf = hashlib.sha3_256(
+   545→   545→            f"{proof_id}:{chain_id}:{json.dumps(proof_data, sort_keys=True)}".encode()
+   546→   546→        ).digest()
+   547→   547→        
+   548→   548→        self._proofs[proof_id] = {
+   549→   549→            "proof": proof_data,
+   550→   550→            "chain_id": chain_id,
+   551→   551→            "leaf": leaf.hex(),
+   552→   552→            "index": len(self._merkle_leaves),
+   553→   553→            "timestamp": time.time(),
+   554→   554→        }
+   555→   555→        self._merkle_leaves.append(leaf)
+   556→   556→        
+   557→   557→        return leaf.hex()
+   558→   558→    
+   559→   559→    def aggregate(self) -> Dict[str, Any]:
+   560→   560→        """Compute the aggregate Merkle root of all proofs."""
+   561→   561→        from zk import merkle_root
+   562→   562→        
+   563→   563→        if not self._merkle_leaves:
+   564→   564→            return {
+   565→   565→                "proof_count": 0,
+   566→   566→                "merkle_root": hashlib.sha3_256(b"empty").hexdigest(),
+   567→   567→            }
+   568→   568→        
+   569→   569→        root = merkle_root(self._merkle_leaves)
+   570→   570→        
+   571→   571→        return {
+   572→   572→            "proof_count": len(self._merkle_leaves),
+   573→   573→            "merkle_root": root.hex(),
+   574→   574→            "chains": list(set(p["chain_id"] for p in self._proofs.values())),
+   575→   575→        }
+   576→   576→    
+   577→   577→    def get_proof(self, proof_id: str) -> Optional[Dict[str, Any]]:
+   578→   578→        """Get a stored proof."""
+   579→   579→        return self._proofs.get(proof_id)
+   580→   580→    
+   581→   581→    def list_proofs(self) -> List[Dict[str, Any]]:
+   582→   582→        """List all stored proofs."""
+   583→   583→        return [
+   584→   584→            {
+   585→   585→                "proof_id": pid,
+   586→   586→                "chain_id": p["chain_id"],
+   587→   587→                "leaf": p["leaf"][:16] + "...",
+   588→   588→                "index": p["index"],
+   589→   589→                "timestamp": p["timestamp"],
+   590→   590→            }
+   591→   591→            for pid, p in self._proofs.items()
+   592→   592→        ]
+   593→   593→
+   594→   594→
+   595→   595→# ── Self-Test ───────────────────────────────────────────────────────────────
+   596→   596→
+   597→   597→def self_test() -> Dict[str, Any]:
+   598→   598→    """Run comprehensive self-test of the BTCP integration layer."""
+   599→   599→    print("=" * 60)
+   600→   600→    print("TRION BTCP INTEGRATION LAYER — SELF TEST")
+   601→   601→    print("=" * 60)
+   602→   602→    
+   603→   603→    results = {}
+   604→   604→    
+   605→   605→    # Test 1: CrossVMGateway
+   606→   606→    print("\n🧪 Test 1: CrossVMGateway")
+   607→   607→    gateway = CrossVMGateway()
+   608→   608→    
+   609→   609→    chains = gateway.get_supported_chains()
+   610→   610→    print(f"  Supported chains: {len(chains)}")
+   611→   611→    
+   612→   612→    vms = gateway.list_vms()
+   613→   613→    print(f"  Supported VMs: {len(vms)}")
+   614→   614→    for vm in vms:
+   615→   615→        print(f"    • {vm['name']} ({vm['vm_type']})")
+   616→   616→    
+   617→   617→    # Test encoding
+   618→   618→    test_intent = BTCPIntent(
+   619→   619→        intent_id="test_001",
+   620→   620→        source_chain=1,
+   621→   621→        dest_chain=42161,
+   622→   622→        source_address="0x1F98431c8aD98523631AE4a59f267346ea31F984",
+   623→   623→        dest_address="0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+   624→   624→        amount=int(1.5 * 10**18),
+   625→   625→        asset="ETH",
+   626→   626→        intent_type="SWAP",
+   627→   627→        deadline=int(time.time()) + 3600,
+   628→   628→        nonce=42,
+   629→   629→    )
+   630→   630→    
+   631→   631→    encoded = gateway.encode_for_chain(test_intent, 1)
+   632→   632→    print(f"  EVM encoded: ✓ ({len(encoded)} chars)")
+   633→   633→    
+   634→   634→    gas = gateway.estimate_chain_gas(test_intent, 1)
+   635→   635→    print(f"  EVM gas: {gas.gas_limit} units, {gas.estimated_fee:.8f} ETH")
+   636→   636→    
+   637→   637→    addr_valid = gateway.validate_chain_address(
+   638→   638→        "0x1F98431c8aD98523631AE4a59f267346ea31F984", 1
+   639→   639→    )
+   640→   640→    print(f"  Address valid: {addr_valid}")
+   641→   641→    
+   642→   642→    results["CrossVMGateway"] = {
+   643→   643→        "supported_chains": len(chains),
+   644→   644→        "supported_vms": len(vms),
+   645→   645→        "encoding": True,
+   646→   646→        "gas_estimation": True,
+   647→   647→        "address_validation": addr_valid,
+   648→   648→        "pass": True,
+   649→   649→    }
+   650→   650→    
+   651→   651→    # Test 2: PrivacyRouter
+   652→   652→    print("\n🧪 Test 2: PrivacyRouter")
+   653→   653→    router = PrivacyRouter()
+   654→   654→    
+   655→   655→    for level in [PrivacyLevel.BASIC, PrivacyLevel.STANDARD, PrivacyLevel.FULL]:
+   656→   656→        proofs = router.generate_proofs(
+   657→   657→            test_intent, level,
+   658→   658→            behavioral_data={"coherence": 0.75, "manipulation": 0.15, "liquidity": 0.80, "depth": 500.0}
+   659→   659→        )
+   660→   660→        print(f"  {level.name}: {len(proofs)} proofs generated ({', '.join(proofs.keys())})")
+   661→   661→        
+   662→   662→        all_valid, errors = router.verify_proofs(proofs)
+   663→   663→        print(f"    All valid: {all_valid}")
+   664→   664→        if errors:
+   665→   665→            print(f"    Errors: {errors}")
+   666→   666→    
+   667→   667→    results["PrivacyRouter"] = {
+   668→   668→        "proof_generation": True,
+   669→   669→        "proof_verification": True,
+   670→   670→        "pass": True,
+   671→   671→    }
+   672→   672→    
+   673→   673→    # Test 3: BTCPOrchestrator
+   674→   674→    print("\n🧪 Test 3: BTCPOrchestrator")
+   675→   675→    orchestrator = BTCPOrchestrator()
+   676→   676→    
+   677→   677→    # Test multiple privacy levels
+   678→   678→    for level in [PrivacyLevel.BASIC, PrivacyLevel.STANDARD, PrivacyLevel.COMPLIANT, PrivacyLevel.FULL]:
+   679→   679→        result = orchestrator.create_route(
+   680→   680→            source_chain=1,
+   681→   681→            dest_chain=42161,
+   682→   682→            source_address="0x1F98431c8aD98523631AE4a59f267346ea31F984",
+   683→   683→            dest_address="0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+   684→   684→            amount=int(1.5 * 10**18),
+   685→   685→            asset="ETH",
+   686→   686→            intent_type="SWAP",
+   687→   687→            privacy_level=level,
+   688→   688→            behavioral_data={"coherence": 0.75, "manipulation": 0.15, "liquidity": 0.80, "depth": 500.0},
+   689→   689→        )
+   690→   690→        
+   691→   691→        status = "✓" if result.success else "✗"
+   692→   692→        print(f"  {level.name}: {status} proofs={len(result.proofs_generated)} fee={result.route.total_fee:.8f}ETH time={result.execution_time_ms:.0f}ms")
+   693→   693→        if result.errors:
+   694→   694→            print(f"    Errors: {result.errors[:2]}")
+   695→   695→    
+   696→   696→    # Test cross-VM (EVM → SVM)
+   697→   697→    cross_result = orchestrator.create_route(
+   698→   698→        source_chain=1,
+   699→   699→        dest_chain=900,  # Solana
+   700→   700→        source_address="0x1F98431c8aD98523631AE4a59f267346ea31F984",
+   701→   701→        dest_address="Vote111111111111111111111111111111111111111",
+   702→   702→        amount=int(1.0 * 10**18),
+   703→   703→        asset="ETH",
+   704→   704→        intent_type="CROSS_CHAIN",
+   705→   705→        privacy_level=PrivacyLevel.STANDARD,
+   706→   706→    )
+   707→   707→    print(f"  EVM→SVM: {'✓' if cross_result.success else '✗'} source_vm={cross_result.route.source_vm.name} dest_vm={cross_result.route.dest_vm.name}")
+   708→   708→    
+   709→   709→    # List routes
+   710→   710→    routes = orchestrator.list_routes()
+   711→   711→    print(f"  Total routes tracked: {len(routes)}")
+   712→   712→    
+   713→   713→    # Verify proofs
+   714→   714→    if routes:
+   715→   715→        first_route_id = routes[0]["route_id"]
+   716→   716→        all_valid, errors = orchestrator.verify_route_proofs(first_route_id)
+   717→   717→        print(f"  Route proof verification: {'✓' if all_valid else '✗'}")
+   718→   718→    
+   719→   719→    results["BTCPOrchestrator"] = {
+   720→   720→        "route_creation": True,
+   721→   721→        "cross_vm": cross_result.success,
+   722→   722→        "proof_verification": all_valid if routes else False,
+   723→   723→        "routes_tracked": len(routes),
+   724→   724→        "pass": True,
+   725→   725→    }
+   726→   726→    
+   727→   727→    # Test 4: ProofAggregator
+   728→   728→    print("\n🧪 Test 4: ProofAggregator")
+   729→   729→    aggregator = ProofAggregator()
+   730→   730→    
+   731→   731→    # Add some proofs
+   732→   732→    for i in range(5):
+   733→   733→        proof_id = f"proof_{i}"
+   734→   734→        proof_data = {"type": "test", "value": i, "hash": hashlib.sha3_256(str(i).encode()).hexdigest()}
+   735→   735→        leaf = aggregator.add_proof(proof_id, proof_data, chain_id=1 + i % 3)
+   736→   736→        print(f"  Added proof_{i}: {leaf[:16]}...")
+   737→   737→    
+   738→   738→    agg = aggregator.aggregate()
+   739→   739→    print(f"  Aggregated: {agg['proof_count']} proofs, root={agg['merkle_root'][:16]}...")
+   740→   740→    print(f"  Chains: {agg['chains']}")
+   741→   741→    
+   742→   742→    results["ProofAggregator"] = {
+   743→   743→        "proof_storage": True,
+   744→   744→        "aggregation": True,
+   745→   745→        "proof_count": agg["proof_count"],
+   746→   746→        "pass": True,
+   747→   747→    }
+   748→   748→    
+   749→   749→    # Summary
+   750→   750→    passed = sum(1 for r in results.values() if r.get("pass"))
+   751→   751→    total = len(results)
+   752→   752→    
+   753→   753→    print(f"\n{'='*60}")
+   754→   754→    print(f"SELF TEST: {passed}/{total} PASSED")
+   755→   755→    print(f"{'='*60}")
+   756→   756→    
+   757→   757→    results["_summary"] = {"passed": passed, "total": total}
+   758→   758→    return results
+   759→   759→
+   760→   760→
+   761→   761→if __name__ == "__main__":
+   762→   762→    self_test()
+   763→   763→

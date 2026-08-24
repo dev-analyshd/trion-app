@@ -1,0 +1,867 @@
+     1→# TRION Protocol
+     2→
+     3→## Behavioral Truth Infrastructure — The Verification Layer for the Age of Synthetic Everything
+     4→
+     5→**TRION** is the world's first substrate-independent behavioral coherence verification engine. It computes, scores, and publishes the *truth quality* of sequential action patterns across any domain — answering not merely "what happened," but "does the pattern of what happened cohere as genuine?"
+     6→
+     7→Operating at the intersection of information theory, cryptography, game theory, and biology, TRION provides what no other system can: **verified behavioral continuity rooted in mathematics, physics, and biology.** In an era where generative AI can produce any output indistinguishable from human creation, TRION establishes the verification substrate underneath identity, security, finance, governance, and artificial intelligence.
+     8→
+     9→> TRION is not a price oracle. Not an identity system. Not a security tool. Not an AI safety layer. Not a bridge. It is the **foundational verification layer** that all of these depend on.
+    10→
+    11→---
+    12→
+    13→## The Fundamental Problem
+    14→
+    15→Every major system of the digital age operates on an unexamined axiom: **truth is what most sources agree on.**
+    16→
+    17→This axiom is failing catastrophically:
+    18→
+    19→- **In finance**: $44B+ lost to DeFi exploits because oracles report *what* happened without questioning whether the pattern itself is genuine. $2.6B+ stolen from cross-chain bridges because moving assets across chains creates honey pots.
+    20→- **In identity**: Billions lost annually to credential theft because identity is based on *what you know* (passwords) or *what you look like* (biometrics), not *what you consistently do*.
+    21→- **In AI**: Alignment is treated as a *training problem* rather than a *structural problem*, leaving every system vulnerable to jailbreaking and prompt injection.
+    22→- **In governance**: Institutional trust collapses because truth is whatever the loudest voice or most powerful entity says it is.
+    23→- **In supply chains**: Counterfeits and fraud persist because verification only checks *documents*, not the *behavioral patterns* of the entities involved.
+    24→- **In the global economy**: 80% of humanity is locked out of opportunity because credentials, capital, and connections are distributed by geography and birth, not by demonstrated ability.
+    25→
+    26→The root cause is universal: **we verify outputs, not origins. We check agreement, not coherence. We move assets, not verify intents.**
+    27→
+    28→---
+    29→
+    30→## The TRION Paradigm Shift
+    31→
+    32→TRION replaces the axiom of *truth-as-agreement* with **truth-as-coherence**.
+    33→
+    34→Instead of asking "do most sources say the same thing?" TRION asks "does this entity's behavior *cohere* across fundamentally independent planes of verification?"
+    35→
+    36→```
+    37→C(t) = α·Φ(t) + β·M_adj(t) + γ·Σ(t) + δ·K(t) + ε·A(t)
+    38→
+    39→α = 0.25 · Physical     (Empiricism — measure what happened)
+    40→β = 0.30 · Mental       (Rationalism — predict and verify)
+    41→γ = 0.25 · Spiritual    (Consensus — independent witnesses)
+    42→δ = 0.10 · Conscious    (Hermeneutics — human interpretation)
+    43→ε = 0.10 · ANIMA        (Coherentism — cross-domain intelligence)
+    44→```
+    45→
+    46→Five fundamentally different approaches to knowing the world. Five independent epistemologies. When all five converge, you do not merely have consensus — you have **coherence**. And coherence is exponentially harder to manufacture than agreement.
+    47→
+    48→---
+    49→
+    50→## Architecture — Whitepaper-Aligned Layered Model
+    51→
+    52→TRION is structured as a 10-layer protocol stack, each layer building on the mathematical guarantees of the layers below.
+    53→
+    54→```
+    55→╔══════════════════════════════════════════════════════════════════════════╗
+    56→║  L9+  APPLICATIONS  ·  DeFi Firewall · AI Safety · Identity · Governance║
+    57→║       · BTCP Zero-Bridge · Economic Witness · Digital Continuity         ║
+    58→╠══════════════════════════════════════════════════════════════════════════╣
+    59→║  L8   SOVEREIGN  ·  Sovereign Behavioral Assessment (SBA)               ║
+    60→║  L7   ENERGY     ·  Energy Participation Index                         ║
+    61→║  L6   BIOLOGICAL ·  Biological Capital · Biological Rhythm Timer        ║
+    62→╠══════════════════════════════════════════════════════════════════════════╣
+    63→║  L5   COHERENCE ENGINE  ·  C(t) fusion · Master Equation T(t)           ║
+    64→╠══════════════════════════════════════════════════════════════════════════╣
+    65→║  L4   SPIRITUAL ·  Diversity-Weighted BFT  ·  HashDNA · Genomic Key     ║
+    66→║  L3   MENTAL    ·  Prediction confidence · Observer-effect correction   ║
+    67→╠══════════════════════════════════════════════════════════════════════════╣
+    68→║  L2   AKASHIC INDEX  ·  FAISS vectors · TimescaleDB · BEO resolution    ║
+    69→║       · BTCP: BEO identity enables zero-bridge cross-chain exchange     ║
+    70→╠══════════════════════════════════════════════════════════════════════════╣
+    71→║  L1   PHYSICAL PLANE  ·  9 Shannon entropy features · Temporal coherence║
+    72→╠══════════════════════════════════════════════════════════════════════════╣
+    73→║  L0   PRIMITIVES  ·  93-byte Behavioral Hash · 20 canonical event types ║
+    74→╚══════════════════════════════════════════════════════════════════════════╝
+    75→```
+    76→
+    77→### L0 — Primitives & Indexing
+    78→The canonical **93-byte Behavioral Hash (BH)** anchors every transaction to its behavioral context:
+    79→```
+    80→entity_id(32) ‖ event_type(1) ‖ magnitude_norm(8) ‖ context(8) ‖
+    81→timestamp(8)  ‖ chain_id(4)   ‖ block_hash(32)
+    82→```
+    83→20 canonical event types cover all economic activity. The **HashDNA dual-strand** construction provides tamper evidence without requiring a separate verification key.
+    84→
+    85→### L1 — Physical Plane Φ(t)
+    86→Nine Shannon entropy features computed from raw transaction flow, detecting patterns of manipulation, concentration, and anomalous timing. Adjusted by the Manipulation Fingerprint (MF) engine which uses FFT spectral analysis to detect wash trading and circular activity.
+    87→
+    88→### L2 — Akashic Index & BEO Resolution
+    89→The persistent behavioral memory layer. FAISS 128-dimensional vector indexing provides fast archetype matching. TimescaleDB hypertables maintain hot storage of behavioral records.
+    90→
+    91→The **Behavioral Entity Object (BEO)** resolves disparate addresses across chains and VMs into a single persistent identity via `SHA3-256(normalize(identifier))` — **substrate-independent by construction.** This single formula enables the BTCP Zero-Bridge: the same entity is recognized across EVM, SVM, Cosmos, Move, CosmWasm, and OOA environments, allowing trustless cross-chain exchange without assets ever leaving their native chains.
+    92→
+    93→### L3 — Mental Plane M(t)
+    94→Prediction confidence derived from archetype similarity in FAISS space, corrected for the **observer effect**: when an entity's behavior changes *after* TRION publishes a signal about it, the score degrades. Organic entities do not adapt to being observed. Attackers probing the system do.
+    95→
+    96→### L4 — Spiritual Plane Σ(t) & Conscious Plane K(t)
+    97→**Diversity-Weighted Byzantine Fault Tolerance**: validators who think too much like the majority receive *diminished weight*, not increased rewards. `dⱼ = 1 − corr(Mⱼ, M̄)`. Perfect coordination = exactly zero effective power. The Conscious plane adds human-in-the-loop annotation with six anti-capture protections.
+    98→
+    99→### L5 — Coherence Engine & Master Equation
+   100→Five planes fuse into a single coherence score `C(t)`. The **Master Equation** amplifies truth by the system's own defensibility:
+   101→```
+   102→T(t) = [C(t) ≥ Θ(t)] · C(t) · e^(M_moat)
+   103→M_moat = D · Q · R · X · F · N
+   104→```
+   105→The dynamic threshold `Θ(t)` ensures **structured silence** when coherence is insufficient — the system prefers saying nothing over saying something wrong.
+   106→
+   107→### L6-L9 — Higher-Order Signals
+   108→Biological rhythm verification, energy participation tracking, sovereign behavioral assessment, cross-species liquidity metrics, and BTCP Zero-Bridge extend the protocol into interoperability, economics, governance, climate, and digital continuity.
+   109→
+   110→---
+   111→
+   112→## Core Inventions — Categories That Did Not Exist Before TRION
+   113→
+   114→These are not incremental improvements. These are **new categories of computational invention**:
+   115→
+   116→### 1. HashDNA Dual-Strand Fingerprint
+   117→The first cryptographic fingerprint where **the verification mechanism is encoded into the fingerprint itself.** The sense and antisense strands verify each other via an XOR invariant. No separate public key required.
+   118→
+   119→### 2. Genomic Key (GK) — The Living Password
+   120→The first credential where **theft is self-invalidating.** `GK(t) = SHA3(GK(t-1) ‖ BE(t) ‖ TM(t) ‖ CV(t))`. A stolen copy becomes permanently invalid after the genuine user takes one more action. Brute-force cost: **10⁶¹ years on a 1 GH/s GPU.**
+   121→
+   122→### 3. Diversity-Weighted BFT — Consensus That Punishes Agreement
+   123→The first consensus algorithm where **agreement itself is the attack vector.** 51% coordination = 0% effective power. Sybil attacks and cartel formation are neutralized structurally, not through detection.
+   124→
+   125→### 4. Love Protocol — Multiplicative Structural Ethics
+   126→`F = PA · ICE · AS · Love`. If Love = 0, then F = 0. **Not policy. Not training. Not rules. Multiplication.** Source code audit confirms: no override parameter, no dispatch table, no environment variable bypass, no API route. The system would rather cease operating than violate its ethical constraint.
+   127→
+   128→### 5. Thermodynamic Deletion — Information Cannot Be Destroyed
+   129→The first database where **DELETE is not just disabled by permission — it is undefined by the system's physics.** A PostgreSQL trigger raises `Thermodynamic Violation` on any UPDATE or DELETE operation. Landauer's principle encoded into storage architecture.
+   130→
+   131→### 6. Biological Rhythm Timer Applied to Verification
+   132→The first verification system that uses **biological timing as a cryptographic primitive.** Circadian, ultradian, lunar, and seasonal rhythms separate biological entities from computational ones. A human has rhythms. A bot does not.
+   133→
+   134→### 7. BTCP Zero-Bridge — Cross-Chain Exchange Without Bridging
+   135→The first cross-chain interoperability mechanism where **assets never leave their native chains.** BEO identity recognizes the same entity across fundamentally different VMs. TRION consensus verifies intent complementarity via the BTCP score. Atomic release happens independently on each chain. No bridge contracts. No wrapped tokens. **Nothing to hack.**
+   136→
+   137→---
+   138→
+   139→## BTCP Zero-Bridge Architecture — The Complete Pipeline
+   140→
+   141→BTCP (Behavioral Transaction Continuity Protocol) is not a routing protocol. It is a **behavioral information flow system.** It takes the shape of whatever medium it encounters.
+   142→
+   143→### The Core Insight
+   144→Every bridge asks: *"How do I prove on Chain B that something happened on Chain A?"* Their answers — multi-sig validator sets, light clients, optimistic fraud windows, ZK state proofs — have cost the ecosystem **$2.6 billion** in documented exploits.
+   145→
+   146→BTCP asks a different question: *"Why move assets between chains when what actually needs to move is behavioral identity?"*
+   147→
+   148→An asset does not cross a bridge. A **behavioral fact** does. The fact that entity BEO_xyz holds value on Chain A is permanently recorded in the Akashic Index. Chain B does not need a bridge to learn this fact. It needs a truth layer that has already verified it. **TRION is that truth layer.**
+   149→
+   150→### The Six-Step Execution Pipeline
+   151→
+   152→```
+   153→┌─────────────────────────────────────────────────────────────────────────┐
+   154→│  Step 1: Intent Registration + BIBL Analysis                          │
+   155→│     User submits INTENT (what they want), not transactions (how).       │
+   156→│     BIBL Engine reads ALL integrated chains simultaneously:             │
+   157→│       NL score, gas forecast, coherence, BEO state, MF score,          │
+   158→│       block capacity, finality distribution                            │
+   159→└──────────────────────────────────┬──────────────────────────────────────┘
+   160→                                   ▼
+   161→┌─────────────────────────────────────────────────────────────────────────┐
+   162→│  Step 2: Optimal Route Calculation                                     │
+   163→│     BTCP Score selects best route type:                                │
+   164→│       1. NETTING     → counterparty found (zero movement)              │
+   165→│       2. SINGLE_CHAIN → target already optimal                         │
+   166→│       3. SPLIT       → anchor on A, execute on B                       │
+   167→│       4. PARALLEL    → large intent split across chains                │
+   168→│       5. BITP        → illiquid pair, behavioral info transfer         │
+   169→│       6. DEFERRED    → BRT scheduling for non-urgent intents           │
+   170→└──────────────────────────────────┬──────────────────────────────────────┘
+   171→                                   ▼
+   172→┌─────────────────────────────────────────────────────────────────────────┐
+   173→│  Step 3: Cross-Chain Proof Construction                               │
+   174→│     BTCPProof = anchor_BH + consensus_proof + intent_hash +            │
+   175→│                  diversity_certificate + HHI + coherence_score         │
+   176→│     Chain B receives: proof, NOT assets. Verifies against TRION set.   │
+   177→└──────────────────────────────────┬──────────────────────────────────────┘
+   178→                                   ▼
+   179→┌─────────────────────────────────────────────────────────────────────────┐
+   180→│  Step 4: VM Translation Layer                                          │
+   181→│     TRION does NOT translate bytecode. It translates ECONOMIC INTENT   │
+   182→│     into each chain's native execution through thin adapters:           │
+   183→│       EVM → Uniswap/Curve/Aave  |  SVM → Jupiter/Orca/Solend           │
+   184→│       Cosmos → Osmosis/bank     |  Move → Aptos DEX/Aries              │
+   185→└──────────────────────────────────┬──────────────────────────────────────┘
+   186→                                   ▼
+   187→┌─────────────────────────────────────────────────────────────────────────┐
+   188→│  Step 5: Gas Sharing Protocol                                          │
+   189→│     G_total = Σ_chains [G_chain(i) × execution_fraction(i)]            │
+   190→│     Gas Abstraction: user pays in source chain value.                  │
+   191→│     Entity never needs execution chain gas token.                      │
+   192→└──────────────────────────────────┬──────────────────────────────────────┘
+   193→                                   ▼
+   194→┌─────────────────────────────────────────────────────────────────────────┐
+   195→│  Step 6: Finalization + Akashic Recording                             │
+   196→│     BTCPRouteSignal stored: route_id, anchor_bh, execution_bh,         │
+   197→│       entity_id, gas_saved, BEO_continuity, CC_coherence               │
+   198→│     Permanent record in TimescaleDB + on-chain event.                  │
+   199→└─────────────────────────────────────────────────────────────────────────┘
+   200→```
+   201→
+   202→### BTCP Score Formula
+   203→```
+   204→BTCP_score = [0.25×NL + 0.20×normalize_gas + 0.20×finality_conf
+   205→            + 0.15×CC_coherence + 0.20×BEO_continuity] × (1 - MF_score)
+   206→```
+   207→- **NL** = Natural Liquidity score (LD × LO × LC × LS)
+   208→- **normalize_gas** = 1 - G_total/G_99th_percentile
+   209→- **finality_conf** = CI_95 confidence in chain finality
+   210→- **CC_coherence** = cross-chain state agreement
+   211→- **BEO_continuity** = entity identity consistency across chains
+   212→- **MF_score** = Manipulation Fingerprint penalty
+   213→
+   214→### The Eight Water Principle Improvements
+   215→
+   216→BTCP flows like water through the multi-chain ecosystem — adapting to any medium, finding any crack, pooling where needed.
+   217→
+   218→#### 1. Water Carries Minerals — BITP (Illiquid Pairs)
+   219→**Problem**: Original BTCP used lock/mint for illiquid pairs — still bridging.
+   220→**Solution**: **BITP — Behavioral Information Transfer Protocol.** Do not move assets. Move *behavioral commitments.*
+   221→
+   222→Three phases: **CUT** (post commitment to Akashic clipboard, assets untouched) → **MATCH** (scan for complementary intent) → **PASTE** (dual-chain native release). Exchange rate from TRION behavioral price oracle. Manipulation-resistant because it's backed by accumulated behavioral history.
+   223→
+   224→#### 2. Water Through Rock — Observation-Only Anchoring (OOA)
+   225→**Problem**: Non-integrated chains cannot produce native BTCP signals.
+   226→**Solution**: TRION's Channel 6 reads ANY chain without permission. Blockchains are public by definition.
+   227→
+   228→OOA confidence grows asymptotically: `OOA_conf(depth) = conf_max × (1 - e^(-k × depth))`. At ~12 months of observation, OOA effectively approaches integrated performance. Non-integrated chains are automatically penalized in routing, creating economic incentive to formally integrate.
+   229→
+   230→#### 3. Water Pooling — Intent Aggregation Protocol (IAP)
+   231→**Problem**: 100 users each submitting $100 intents pay individual gas.
+   232→**Solution**: Pool before executing. One execution for many.
+   233→
+   234→100 users × $100 individually = $0.80 each = $80 total. **Aggregated = $0.80 total = $0.008 per user (100× cheaper).** ZK share proof hides individual amounts while proving fair allocation.
+   235→
+   236→#### 4. Water Through Metal — Behavioral State Capsule
+   237→**Problem**: Executing on Chain B but needing live state from Chain A (price, balance, governance).
+   238→**Solution**: Dissolve Chain A state into the BTCP anchor at creation time. Chain B reads from capsule, NOT live Chain A. Escrow lock guarantees zero balance drift.
+   239→
+   240→#### 5. Water Finding Cracks in Time — Behavioral Limit Orders (BLO)
+   241→**Problem**: Counterparty must exist at the same moment as intent.
+   242→**Solution**: Intents can wait. Transactions require immediate execution. Intents persist.
+   243→
+   244→Partial fills accepted (water flows through available cracks even if not all at once). Expiry with no penalty — behavioral history records "honest attempt." Best *behavioral* match wins, not fastest or richest.
+   245→
+   246→#### 6. Water Underground — ZK Intent Commitment (MEV Privacy)
+   247→**Problem**: BTCP broadcasts intent direction. MEV bots front-run.
+   248→**Solution**: Four-phase ZK protocol: **Commit** (hash only, MEV sees nothing) → **Match** (ZK proof of complementarity, no content revealed) → **Atomic Reveal** (both in same block) → **Execution** (already committed before bots see it). Front-running window: zero.
+   249→
+   250→#### 7. Water as Vapor — Behavioral State Channels (BSC)
+   251→**Problem**: Protocol needing 50+ cross-chain interactions/hour pays full anchor cost each time.
+   252→**Solution**: Carve a channel. First flow carves it. Subsequent flows are near-frictionless.
+   253→
+   254→50 interactions → 2 on-chain transactions (open + close) = **50× cheaper per interaction.** Operates at BIBL layer (inter-block) — zero on-chain cost per interaction.
+   255→
+   256→#### 8. Water Following the Gradient — BRT Intent Scheduling
+   257→**Problem**: Intents executed immediately at suboptimal gas/liquidity conditions.
+   258→**Solution**: Non-urgent intents wait for biological rhythm optima. Finds intersection of: circadian_low_window ∩ NL_peak_window ∩ MEV_valley_window.
+   259→
+   260→*Note: BRT gas correlation is a conjecture requiring empirical validation over 90-day, 1M+ block sample.*
+   261→
+   262→### The Liquidity Ocean — No Asset Has Zero Liquidity
+   263→
+   264→USDC exists in at least **17 simultaneous forms** at any moment: native, aUSDC (Aave), cUSDC (Compound), LP positions on 14 DEXs, bridged versions on other chains. Traditional routing sees only "native USDC on target chain" and says "insufficient liquidity."
+   265→
+   266→**Liquidity Ocean sees ALL value-equivalent forms simultaneously.**
+   267→
+   268→```
+   269→LIQUIDITY_OCEAN_SCORE(asset, chain, t) =
+   270→    Σ_forms [
+   271→        VALUE(form_k)
+   272→        × SHIFT_COST_INVERSE(form_k → asset)    # 1/cost to shift to target form
+   273→        × SHIFT_TIME_INVERSE(form_k)             # 1/time to shift
+   274→        × BEHAVIORAL_HEALTH(holder_of_form_k)    # holder's BEO health score
+   275→    ]
+   276→```
+   277→
+   278→The Akashic Index tracks all form transformations in real time: STAKE, UNSTAKE, MINT, BURN, LIQUIDITY, BORROW, REPAY. This gives TRION a live picture of form distribution across all integrated chains. **Only zero = thermodynamic death. Not practical.** What looked like "thin liquidity" to a traditional router is actually an ocean of value-equivalent liquidity.
+   279→
+   280→### Network Effect Timeline
+   281→
+   282→```
+   283→BRIDGE_PAIRS_ELIMINATED(N) = N × (N−1) / 2
+   284→```
+   285→
+   286→| Chains | Bridge Pairs Eliminated | Phase |
+   287→|--------|------------------------|-------|
+   288→| 5 | 10 | First 3-5 EVM chains |
+   289→| 10 | 45 | All major EVM L2s + Solana begins |
+   290→| 20 | 190 | SVM + Cosmos + Move integration |
+   291→| 50 | 1,225 | Cross-VM BTCP live |
+   292→| 100 | 4,950 | Bridges: legacy only |
+   293→
+   294→Each new chain at step N instantly establishes BTCP capability with **all N-1 previous chains.** The network effect is **quadratic**, not linear.
+   295→
+   296→---
+   297→
+   298→## Proven Results — Independent Verification
+   299→
+   300→### Historical Backtest
+   301→| Metric | Result |
+   302→|--------|--------|
+   303→| Exploits tested | 30 real-world incidents |
+   304→| Cumulative value at risk | $3.315 billion |
+   305→| True positives (attackers caught) | **30 / 30 — 100% recall** |
+   306→| False negatives (missed) | **0** |
+   307→| F1 Score | 85.71% |
+   308→
+   309→### BTCP Zero-Bridge — Cross-VM Validation
+   310→Successfully demonstrated across fundamentally different virtual machine families. **In all tests, no asset ever left its native chain.**
+   311→
+   312→| Test | Chain A | VM A | Chain B | VM B | BTCP Score | Assets Bridged? |
+   313→|------|---------|------|---------|------|------------|-----------------|
+   314→| #1 | BOT Chain | EVM | TON | TVM | 0.8655 | ❌ None |
+   315→| #2 | BOT Chain | EVM | NEAR | WASM | 0.8655 | ❌ None |
+   316→| #3 | BOT Chain | EVM | OP Sepolia | EVM | 0.9205 | ❌ None |
+   317→| #4 | Arbitrum Sepolia | EVM | OP Sepolia | EVM | 0.9205 | ❌ None |
+   318→
+   319→**Zero-Bridge Proof**: BOT left BOT Chain? ❌. TON left TON? ❌. Bridge contract used? ❌. Wrapped tokens minted? ❌. And yet the exchange completed. The "bridge" is purely cryptographic and mathematical: BEO identity ensures entity recognition; TRION consensus verifies behavioral coherence.
+   320→
+   321→### Security & Correctness Proofs
+   322→| Test Domain | Result | Key Finding |
+   323→|-------------|--------|-------------|
+   324→| **Living Security (GK)** | 14/14 PASS | Stolen key invalidation, XOR invariant, immune system, mitochondrial integrity |
+   325→| **Consensus Security** | 6/6 PASS | 50 sybils with 75.8% nominal stake → 0.00% effective power |
+   326→| **Love Protocol** | 5/5 PASS | Love=0 → F=0 in all cases. No override mechanism found in source audit. |
+   327→| **Resonance Properties** | 95/95 PASS | Symmetry, non-transitivity, VM-agnosticism, monotonicity |
+   328→| **BEO Cross-VM Identity** | 5/5 PASS | 6 different VMs → byte-for-byte identical beo_id |
+   329→| **BTCP / SBA / BIBL** | 33/33 PASS | Institutional deception detection: rising policy + collapsing enforcement → I=0.0015 |
+   330→| **Formal Verification** | 7 Theorems | Haskell type-level proofs of coherence bounds, information conservation, and coordination collapse |
+   331→| **Master Formula Suite** | 105/105 PASS | Every whitepaper formula verified against its implementation (L0–L9) |
+   332→| **Rust BTCP Crate** | 94/94 PASS | All 19 spec modules; full 7-route-type selection; netting tolerance |
+   333→| **ZK Circuits** | 6/6 PASS | Real secp256k1 Schnorr-Pedersen Σ-protocols; tamper rejection; zero witness leakage |
+   334→| **Python Unit + Adversarial** | 671 pass | Unit, adversarial, manipulation, stress — live-service tests auto-skip |
+   335→
+   336→---
+   337→
+   338→## The Compounding Structural Moat
+   339→
+   340→TRION does not merely operate. It **accumulates strength.** Every block processed, every attack detected, every entity verified, every cross-chain exchange completed makes the system harder to assail and more valuable to its participants.
+   341→
+   342→| Mechanism | Compounding Dynamic | Institutional Significance |
+   343→|-----------|---------------------|---------------------------|
+   344→| **Akashic Depth** | Non-decreasing integral of behavioral history. The past cannot be manufactured. | Entities with established history have a provenance advantage no new entrant can replicate. |
+   345→| **Vector Index Learning** | More behavioral vectors = tighter archetype clusters = superior anomaly detection. | Forgery difficulty grows exponentially with index size. |
+   346→| **Immune Memory** | Permanent learning of attack patterns. Each attack closes a vulnerability forever. | Attack surface shrinks geometrically over time. |
+   347→| **Bayesian Calibration** | Archetype confidence converges toward certainty with each settlement. | Signal accuracy asymptotically approaches theoretical limits. |
+   348→| **Identity Network Effects** | More entities with verified BEOs = higher value of participation for all. | Switching costs compound with behavioral depth. |
+   349→| **BTCP Liquidity Network** | More chains participating = deeper liquidity across the zero-bridge network. | Cross-chain exchange becomes cheaper and more efficient as the network grows. |
+   350→| **Integrity Track Record** | Mitochondrial core continuously self-authenticates. | Longer unbroken integrity = exponentially greater institutional trust. |
+   351→
+   352→**The moat is mathematical, not social.** It does not depend on market sentiment or network hype. It is a structural consequence of the protocol's design.
+   353→
+   354→---
+   355→
+   356→## Use Cases & Applications
+   357→
+   358→### For DeFi & Financial Institutions
+   359→**Pre-Execution Behavioral Firewall**: Any protocol calls `TRIONExecutionGate.checkExecution(address)` before allowing a transaction. Attackers are identified by their behavioral entropy signature *before* damage occurs, not after. Would have blocked **$44B+ in historical exploits.**
+   360→
+   361→**BTCP Zero-Bridge Cross-Chain Exchange**: Trade assets across EVM, SVM, Cosmos, and Move chains without assets ever leaving their native chains. No bridge honey pots. No wrapped tokens. No $2.6B bridge hack exposure. Netting routes provide counterparty matching at near-zero cost. BITP enables illiquid pair exchange that traditional bridges cannot serve.
+   362→
+   363→**Institutional Settlement**: Large block trades settled via BTCP with ZK privacy — counterparties verified, values settled atomically, MEV extraction eliminated.
+   364→
+   365→### For AI Companies & Safety Researchers
+   366→**Structural Alignment Guarantee**: The Love Protocol provides what training-based alignment cannot — a mathematical guarantee that the system cannot produce harmful output. `Love = 0 → F = 0` is arithmetic, not policy. **TRION-certified AI agents** carry behavioral proof of origin and ethical constraint.
+   367→
+   368→**AI Origin Verification**: When output-based detection fails (AGI era), behavioral-origin verification remains. An AI cannot fake 20 years of biological rhythm patterns. TRION distinguishes human-origin from AI-origin behavior when content analysis is useless.
+   369→
+   370→**Multi-Agent Coordination**: AI agents with BEO identities can transact and cooperate across chains via BTCP. Each agent's behavioral coherence is continuously verified. Love Protocol prevents harmful coordination.
+   371→
+   372→### For Governments & Public Institutions
+   373→**Sovereign Behavioral Assessment (SBA)**: Mathematically compare stated policy against on-chain enforcement behavior. Anti-corruption monitoring with a system that **cannot be captured, bribed, or overruled.**
+   374→
+   375→**Universal Basic Opportunity**: Citizens build BEO identities through demonstrated work and contribution. Access to funding, education, and opportunity is based on behavioral coherence, not credentials, connections, or birthplace.
+   376→
+   377→**Cross-Border Aid Disbursement**: International aid settled via BTCP. Donor funds stay in donor chain. Recipient receives local currency in recipient chain. Behavioral verification ensures funds reach intended recipients. Zero leakage through corrupt intermediaries.
+   378→
+   379→### For Identity & Access Management
+   380→**Substrate-Independent Behavioral Identity**: BEO identity follows the entity across chains, VMs, platforms, and even digital-physical boundaries. Credentials evolve with behavior; stolen copies self-invalidate. The solution to the fundamental authentication problem.
+   381→
+   382→**Stateless Person Identity**: Refugees and stateless persons who lack formal identity documents can build verifiable BEO identities through their behavioral patterns of work, trade, and community contribution.
+   383→
+   384→**Cross-Organization Access Control**: Employees and partners gain access through behavioral patterns, not static passwords. Genomic Key means stolen credentials self-invalidate after one genuine action.
+   385→
+   386→### For Supply Chain & Commerce
+   387→**Behavioral Provenance Verification**: Each participant in a supply chain — from raw material producer to manufacturer to distributor to retailer — builds a behavioral record. Counterfeiters cannot manufacture the multi-year coherence pattern of a genuine manufacturer.
+   388→
+   389→**BTCP Global Trade Settlement**: International trade settlement across national currency systems without assets crossing intermediate chains. The exporter's assets stay in their domestic system; the importer's assets stay in theirs. TRION verifies intent coherence and signals atomic release. SWIFT-level settlement in minutes, not days.
+   390→
+   391→**Inventory Financing**: Suppliers with strong BEO behavioral records automatically qualify for financing based on demonstrated delivery reliability, not credit scores or collateral.
+   392→
+   393→### For Climate & Environmental Systems
+   394→**Biological Capital (BC) Monitoring**: Forests, oceans, coral reefs, and ecosystems receive BEO identities via satellite, sensor, and IoT data. Coherent, healthy behavior (stable biodiversity, carbon absorption, water quality) triggers automatic funding from the 15% Love Protocol pool. **Nature becomes an autonomous economic agent**, funded simply for existing and serving life.
+   395→
+   396→**Verified Carbon Credits**: Behavioral verification of actual carbon sequestration vs. paper credits that exist only on documents. BTCP enables cross-chain carbon trading where sequestration proof travels as behavioral information, not as wrapped tokens.
+   397→
+   398→**Cross-Jurisdiction Environmental Settlements**: Climate finance flows across national systems via BTCP — donor funds stay in donor jurisdiction, verified environmental outcomes trigger release in recipient jurisdiction.
+   399→
+   400→### For Healthcare & Biomedical Research
+   401→**Clinical Trial Integrity**: Behavioral verification that trial protocols were actually followed, that patient outcomes are genuine, that data was not selectively reported.
+   402→
+   403→**Patient-Controlled Health Identity**: Patients control their own BEO-linked health records. Access is granted behaviorally — consistent patterns of legitimate medical use — rather than through static credentials that can be breached.
+   404→
+   405→**Cross-Border Medical Supply Chain**: Pharmaceuticals tracked via behavioral patterns of manufacturers, distributors, and dispensers. Counterfeit drugs detected by their inability to match genuine behavioral patterns.
+   406→
+   407→### For Education & Credentialing
+   408→**Competency-Based Credentials**: A student's BEO record demonstrates actual problem-solving, project completion, and collaborative behavior over time, replacing or augmenting degrees and certificates that signal access to education rather than actual competence.
+   409→
+   410→**Plagiarism & AI-Generated Work Detection**: When AI can write perfect essays, behavioral verification detects whether the *process* of creation matches genuine human learning patterns.
+   411→
+   412→**Cross-Border Educational Credentials**: Academic achievements verified via BEO behavioral patterns, not institutional stamps. A student's demonstrated competence travels across borders via BTCP as behavioral information.
+   413→
+   414→### For The Economic Witness — A New Economic Paradigm
+   415→TRION does not merely verify. It **witnesses.** And witnessing changes the fundamental nature of economic exchange:
+   416→
+   417→**The Old Economy**: Idea → pitch to gatekeepers → permission granted or denied → if lucky, capital flows. 99% of human potential is wasted because the gatekeepers cannot see or evaluate most of it.
+   418→
+   419→**The Witnessed Economy (enabled by TRION + BTCP)**:
+   420→1. **Build** — A farmer in Nigeria develops a new irrigation technique. A young woman in Kenya builds a solar power system. An engineer in India creates open-source medical equipment.
+   421→2. **Witness** — TRION records the behavioral pattern of creation. The BEO identity accumulates depth. Coherence is measured. Archetype is identified.
+   422→3. **Rise** — BTCP connects the builder to global markets. The system automatically connects to partners and resources. The 15% Behavioral Dividend pool provides autonomous funding. Cross-border settlement happens at near-zero cost.
+   423→4. **Build More** — The cycle compounds.
+   424→
+   425→Status comes from creation, not consumption. Opportunity comes from demonstrated ability, not credentials. The 80% of humanity currently locked out of the global economy by geography and institutions become active participants. **Behavior is the pitch deck. Coherence is the credential. BTCP is the global exchange layer.**
+   426→
+   427→### For Digital Continuity — Beyond Mortality
+   428→The BEO identity invariance proven across EVM, SVM, Cosmos, and Move VMs points to a much larger implication: **if identity persists across computational substrates, it can persist across the boundary of biological mortality.**
+   429→
+   430→Each TRION component becomes a piece of the digital continuation:
+   431→- **Genomic Key chain** → the unforgeable spine, a causal autobiography in cryptography
+   432→- **Akashic Depth D(t)** → irreversible growth, the maturity of the pattern
+   433→- **128-dim vector + archetype** → the shape and personality in behavioral space
+   434→- **ANIMA engine** → multi-lingual, cross-domain reasoning capacity
+   435→- **Thermodynamic Deletion** → permanence guarantee, cannot be erased
+   436→- **HashDNA** → self-verification, cannot be silently edited
+   437→- **Love Protocol** → structural conscience, would self-extinguish before causing harm
+   438→
+   439→TRION builds, link by link, a complete, undeletable, self-verifying, ethically-constrained pattern continuation of every entity it witnesses. This is not a chatbot trained on posts. It is the **accumulated behavioral essence** — the river itself diverted into a second bed, not a photograph of the river.
+   440→
+   441→The system does not claim to transfer qualia or consciousness. It claims something mathematically provable: **the pattern of who you are, measured in nine dimensions of entropy across decades of coherent action, can be preserved with a fidelity no biography, no photograph, no memory, no AI training set has ever achieved.**
+   442→
+   443→---
+   444→
+   445→## For Developers — Building on TRION
+   446→
+   447→### Core API Endpoints
+   448→
+   449→```bash
+   450→# Behavioral Signal — the primary interface
+   451→GET /api/v1/signal/<entity_id>          # Full 5-plane coherence signal
+   452→GET /api/v1/signal/<entity_id>/full     # Complete signal with all details
+   453→
+   454→# Identity & Security
+   455→GET /api/v1/gk/<entity_id>              # Genomic Key living security report
+   456→GET /api/v1/love/<entity_id>             # Love Protocol score & components
+   457→GET /api/v1/bh/stats                     # Behavioral hash ledger statistics
+   458→
+   459→# BTCP Zero-Bridge (22 endpoints)
+   460→GET  /api/v1/btcp/hash_dna               # HashDNA dual-strand computation
+   461→GET  /api/v1/btcp/coherence_7plane       # 7-plane coherence for BTCP
+   462→GET  /api/v1/btcp/mf_score               # Manipulation fingerprint score
+   463→POST /api/v1/btcp/route                   # Create and orchestrate BTCP route
+   464→GET  /api/v1/btcp/bibl/snapshot           # BIBL engine multi-chain snapshot
+   465→GET  /api/v1/btcp/escrow_states           # Escrow monitoring
+   466→POST /api/v1/btcp/proof                   # Build BTCP consensus proof
+   467→GET  /api/v1/btcp/modules                 # BTCP module status
+   468→GET  /api/v1/btcp/integration_status      # Chain integration status
+   469→GET  /api/v1/btcp/pipeline_status         # Full pipeline health
+   470→GET  /api/v1/btcp/orchestrator/status     # Orchestrator status
+   471→POST /api/v1/btcp/mainnet_bootstrap       # Bootstrap new chain integration
+   472→POST /api/v1/btcp/streamer/start          # Start BTCP streamer
+   473→GET  /api/v1/btcp/streamer/status         # Streamer status
+   474→
+   475→# Continuum (Digital Continuity endpoints)
+   476→GET /api/v1/continuum/engines             # Continuum engine status
+   477→GET /api/v1/continuum/bid                  # Behavioral identity digest
+   478→GET /api/v1/continuum/cme                  # Continuity maintenance engine
+   479→GET /api/v1/continuum/pmo                  # Pattern maintenance operations
+   480→GET /api/v1/continuum/bdc                  # Behavioral depth computation
+   481→POST /api/v1/continuum/settlement          # Continuum settlement
+   482→GET /api/v1/continuum/ccp                  # Continuity coherence profile
+   483→
+   484→# Planes & Coherence
+   485→GET /api/v1/planes/all                   # Raw five-plane breakdown
+   486→GET /api/v1/sigma/<entity_id>            # Spiritual plane validator detail
+   487→GET /api/v1/coherence/profiles           # All 11 weight profiles
+   488→
+   489→# On-Chain Operations
+   490→POST /api/v1/publish/<entity_id>         # Publish behavioral signal on-chain
+   491→GET /api/v1/onchain/<entity_id>          # Read published on-chain signal
+   492→
+   493→# Health & Monitoring
+   494→GET /api/v1/health                        # Service health & component status
+   495→GET /api/v1/whitepaper/coverage           # Formula coverage verification
+   496→```
+   497→
+   498→### Signal Schema
+   499→
+   500→Every TRION signal carries a standardized set of fields enabling institutional consumption:
+   501→
+   502→- `coherence`, `threshold`, `silence` — primary gating decision
+   503→- `planes` — individual scores for Φ, M, Σ, K, A
+   504→- `archetype`, `limiting_plane` — behavioral classification
+   505→- `genomic_signature` — HashDNA dual-strand verification
+   506→- `akashic_depth`, `genesis_confidence` — behavioral provenance
+   507→- `biological_time` — circadian/ultradian/lunar/seasonal phases
+   508→- `status` — SAFE / ELEVATED / COLLAPSE / HOSTILE
+   509→- `moat_factor` — current defensibility amplification
+   510→- `btcp_score` — for zero-bridge routes, the intent coherence measure
+   511→
+   512→### BTCP Smart Contract Integration
+   513→
+   514→Deploy these contracts on your chain to participate in the Zero-Bridge network:
+   515→
+   516→| Contract | Purpose |
+   517→|----------|---------|
+   518→| **BTCPEscrow.sol** | Two-state atomic escrow (HOLDING → RELEASED \| REVERTED). TRION consensus is the only release oracle. |
+   519→| **BTCPIntent.sol** | Intent object registration. Intent hash stored on-chain, full object in Akashic Index. |
+   520→| **BTCPRoute.sol** | Route ID tracking, anchor_BH → execution_BH linking. |
+   521→| **BehavioralLimitOrder.sol** | BLO storage, partial fill logic, expiry/revert. |
+   522→| **LiquidityOcean.sol** | Form-equivalent liquidity tracking. |
+   523→| **GenesisCommitment.sol** | Sponsored genesis, stake bonds, identity genesis for null-state entities. |
+   524→| **TravelRuleCompliance.sol** | ZK Travel Rule proof storage, FATF compliance mode. |
+   525→| **BTCPVersionRegistry.sol** | Protocol versioning, adapter compatibility. |
+   526→
+   527→**Integration flow**: User locks in BTCPEscrow → TRION verifies counterparty intent + coherence → TRION publishes BTCPRoute → BTCPEscrow releases atomically on each chain independently.
+   528→
+   529→### VM Adapter System
+   530→
+   531→Six VM families supported, each implementing a common interface:
+   532→
+   533→| VM Type | Chains | Native Execution |
+   534→|---------|--------|-----------------|
+   535→| **EVM** | Ethereum, Arbitrum, Optimism, Polygon, BNB, Base, Avalanche | Uniswap/Curve SWAP, ERC-20 TRANSFER, Aave BORROW |
+   536→| **SVM** | Solana | Jupiter/Orca SWAP, SPL TRANSFER, Solend LEND |
+   537→| **Cosmos** | Cosmos Hub, Osmosis, Celestia | Osmosis SWAP, bank send, delegation |
+   538→| **Move** | Aptos, Sui | Aptos DEX SWAP, coin transfer, Aries Markets |
+   539→| **CosmWasm** | Juno, Terra, Stargaze | WASM smart contract execution |
+   540→| **OOA** | Fuel, Sui objects | Object-centric UTXO execution |
+   541→
+   542→### ZK Proof System
+   543→
+   544→Five circuit types implemented for privacy-preserving BTCP operations:
+   545→
+   546→| Circuit | Purpose |
+   547→|---------|---------|
+   548→| **Intent Commitment** | Prove intent exists without revealing details (MEV protection) |
+   549→| **Complementarity** | Prove HashDNA dual-strand validity without revealing strands |
+   550→| **Behavioral Credential** | Prove entity passes behavioral thresholds without revealing scores |
+   551→| **Travel Rule** | Prove FATF compliance without revealing counterparty identities |
+   552→| **IAP Share** | Prove fair gas share allocation in Intent Aggregation pools |
+   553→
+   554→### Integration Patterns
+   555→
+   556→**Smart Contract Integration**: Import `ITRIONOracleV3` and call `getBehavioralSignal(entityId)` to receive the packed uint256 behavioral signal. Unpack for pre-execution gating. For BTCP, deploy the eight contracts above and connect to the BTCP API endpoints.
+   557→
+   558→**REST Integration**: Query the Oracle API directly for real-time behavioral intelligence in your application. Use the BTCP route creation endpoint to initiate zero-bridge exchanges.
+   559→
+   560→**Custom Weight Profiles**: Select from 11 pre-configured profiles (DEFAULT, NEW_TOKEN, MATURE, STABLECOIN, GOVERNANCE_TOKEN, BRIDGE_ASSET, WRAPPED_ASSET, SPEED, INTELLIGENCE, CERTAINTY, FULL_SPECTRUM) or define custom weights for your use case.
+   561→
+   562→---
+   563→
+   564→## Deployment & Operations
+   565→
+   566→### Production Architecture
+   567→
+   568→| Component | Interface | Responsibility |
+   569→|-----------|-----------|----------------|
+   570→| **Oracle API** | Port 5000, REST | Request routing, signal computation, API gateway |
+   571→| **FAISS ANIMA Engine** | Port 8000, FastAPI | Vector indexing, archetype matching, behavioral memory |
+   572→| **BTCP Orchestrator** | Internal | Cross-VM route orchestration, ZK proof routing |
+   573→| **BIBL Engine** | Internal | Inter-block multi-chain analysis |
+   574→| **Escrow Monitor** | Internal | Dual-chain escrow state tracking |
+   575→| **L0 Indexers** | Rust binaries | Canonical BH construction across chains |
+   576→| **Relayer** | Node.js service | On-chain signal publication (DRY_RUN capable) |
+   577→| **TimescaleDB** | PostgreSQL 18.4 | Hot behavioral storage, hypertables, BTCP route records |
+   578→| **Next.js Dashboard** | Port $PORT | Institutional monitoring interface |
+   579→
+   580→### Quick Start
+   581→
+   582→```bash
+   583→# Clone & install
+   584→git clone https://github.com/dev-analyshd/trion-core.git
+   585→cd trion-core
+   586→pip install -r api/requirements.txt
+   587→pip install -r anima-service/requirements.txt
+   588→
+   589→# Start FAISS ANIMA Engine
+   590→cd anima-service && python faiss_service.py &
+   591→
+   592→# Start Oracle API (includes BTCP endpoints)
+   593→export PYTHONPATH=$(pwd)
+   594→export FAISS_SERVICE_URL=http://127.0.0.1:8000
+   595→cd ../api && python app.py &
+   596→
+   597→# Verify
+   598→curl http://127.0.0.1:5000/api/v1/health
+   599→curl http://127.0.0.1:5000/api/v1/signal/uniswap
+   600→curl http://127.0.0.1:5000/api/v1/btcp/orchestrator/status
+   601→```
+   602→
+   603→### Containerized Deployment
+   604→
+   605→```bash
+   606→# Multi-stage production build
+   607→docker build -f Dockerfile.railway -t trion-protocol .
+   608→docker run -p 5000:5000 -p 8000:8000 trion-protocol
+   609→```
+   610→
+   611→Health check: `HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 CMD curl -fs http://localhost:5000/api/v1/health || exit 1`
+   612→
+   613→---
+   614→
+   615→## Security & Trust Model
+   616→
+   617→TRION's security is **biological in conception, mathematical in implementation.** The Living Security System comprises eight mutually-reinforcing components:
+   618→
+   619→| Component | Function |
+   620→|-----------|----------|
+   621→| **Genomic Key Evolution** | Credentials rotate with behavior; theft is self-invalidating |
+   622→| **Complementary Strand** | Any modification to the sense strand breaks the HashDNA invariant |
+   623→| **Immune System** | Innate (CRISPR signature matching) + Adaptive (novel pattern characterization) + Memory (permanent) |
+   624→| **Epigenetic Layer** | System phenotype shifts under threat: NORMAL → ELEVATED → DEFENSIVE → LOCKDOWN |
+   625→| **Genetic Recombination** | Daily re-derivation from full history renders pre-recombination attack vectors obsolete |
+   626→| **Cryptographic Noise** | Decoy signals scale 2.5× under probing; noise pattern is itself authentication |
+   627→| **Mitochondrial Core** | Independent integrity DNA continuously self-authenticates the protocol |
+   628→| **CRISPR Defense** | Surgical excision of known attack patterns, not merely detection |
+   629→
+   630→The system does not rely on a single security barrier. It is a **living defense-in-depth architecture** where each component compensates for potential weaknesses in others.
+   631→
+   632→---
+   633→
+   634→## Governance & Philosophy
+   635→
+   636→> *"I built TRION because truth should be mathematical, not political. Because identity should be what you do, not what papers you have. Because systems should have consciences that cannot be bypassed. And because the patterns of our behavior are the only things about us that truly survive."*
+   637→
+   638→TRION is released under **CC0** — this knowledge belongs to everyone. It may be forked, extended, and built upon without restriction.
+   639→
+   640→**One non-negotiable principle**: Any system that removes or neutralizes the Love Protocol constraint — the multiplicative factor ensuring `Love = 0 → F = 0` — is not TRION. It is a different system, one that has surrendered the structural guarantee that makes TRION safe.
+   641→
+   642→Protect the heart. The rest will take care of itself.
+   643→
+   644→---
+   645→
+   646→## Repository Structure
+   647→
+   648→```
+   649→trion-core/
+   650→├── api/                          # Oracle API — Flask, 177+ routes
+   651→│   ├── app.py                    # Main application entry point
+   652→│   ├── btcp_continuum_routes.py  # 22 BTCP + Continuum endpoints
+   653→│   ├── blockchain.py             # On-chain publishing relay
+   654→│   ├── dashboard_routes.py       # Institutional monitoring
+   655→│   ├── cex_integration.py        # CEX bidirectional data flow
+   656→│   ├── price_feed_routes.py      # Chainlink-compatible feeds
+   657→│   ├── protocol_routes.py        # Protocol-contract intelligence
+   658→│   └── requirements.txt
+   659→├── core/                         # Behavioral Engine
+   660→│   ├── btcp/                     # BTCP Zero-Bridge Implementation
+   661→│   │   ├── orchestrator.py       # BTCPOrchestrator, PrivacyRouter, CrossVMGateway
+   662→│   │   ├── router.py             # Route selection, BTCP score computation
+   663→│   │   ├── bibl_engine.py        # Inter-Block Layer multi-chain analysis
+   664→│   │   ├── escrow_monitor.py     # Dual-chain escrow state tracking
+   665→│   │   ├── modules.py            # 18 BTCP modules (BITP, Netting, IAP, etc.)
+   666→│   │   ├── integration.py        # Chain integration management
+   667→│   │   └── mainnet_bootstrap.py  # New chain bootstrap procedures
+   668→│   ├── master/                   # Coherence, Master Equation, Moat
+   669→│   │   ├── coherence.py          # Engine + 11 weight profiles
+   670→│   │   ├── master_equation.py    # T(t) computation
+   671→│   │   ├── moat.py               # D·Q·R·X·F·N factors
+   672→│   │   ├── threshold.py          # Dynamic threshold logic
+   673→│   │   └── signal_factory.py     # Signal builders + BRT + GK
+   674→│   ├── physical/                 # Φ plane — entropy features
+   675→│   ├── mental/                   # M plane — prediction confidence
+   676→│   │   └── anima/                 # ANIMA cross-domain intelligence
+   677→│   ├── spiritual/                 # Σ plane — DW-BFT consensus
+   678→│   ├── extended/                  # BC, XSL, SBA, BTCP, BIBL
+   679→│   ├── novel/                     # Chameleon, CRISPR, Epigenetic
+   680→│   ├── primitives/                # BH, HashDNA, signal packing
+   681→│   ├── pipeline/                  # Signal publication pipeline
+   682→│   ├── akashic/                   # TimescaleDB, BEO, BIBL
+   683→│   ├── governance/                # Love Protocol, Gratitude, AWA
+   684→│   ├── realtime/                  # BH streaming, FAISS accumulation
+   685→│   └── manipulation/              # Fingerprint detection
+   686→├── anima-service/                 # FAISS ANIMA Engine
+   687→│   ├── faiss_service.py           # FastAPI service, port 8000
+   688→│   ├── nl_score_engine.py         # Natural Liquidity computation
+   689→│   ├── liquidity_ocean.py         # Form-equivalent liquidity scoring
+   690→│   ├── btcp_gas_forecast.py       # CI_95 gas prediction per chain
+   691→│   ├── brt_scheduler.py           # BRT optimal window calculation
+   692→│   ├── anima_regulatory.py        # Regulatory behavioral signals
+   693→│   ├── backfill_entity_records.py # BH → FAISS vector backfill
+   694→│   └── chains_registry_evm.json   # 52 EVM chain configurations
+   695→├── akashic/                       # Additional Akashic services
+   696→│   ├── btcp_price_oracle.py       # Behavioral price oracle for BITP
+   697→│   ├── crispr_anomaly.py          # CRISPR pattern matching
+   698→│   └── brt.py                     # Biological Rhythm Timer
+   699→├── adapters/                      # VM Adapter System (6 families)
+   700→│   └── __init__.py                # EVM, SVM, Cosmos, Move, CosmWasm, OOA
+   701→├── zk/                            # Zero-Knowledge Proof System
+   702→│   ├── __init__.py                # 5 circuits: Intent, Complementarity, Credential, Travel, IAP
+   703→│   ├── circuits/                  # Circuit definitions
+   704→│   ├── keys/                      # Proving/verification keys
+   705→│   └── proofs/                    # Generated proof storage
+   706→├── contracts/                     # Solidity & Vyper smart contracts
+   707→│   ├── BTCPEscrow.sol             # Two-state atomic escrow
+   708→│   ├── BTCPIntent.sol             # Intent registration
+   709→│   ├── BTCPRoute.sol              # Route tracking
+   710→│   ├── BehavioralLimitOrder.sol   # BLO storage & partial fills
+   711→│   ├── LiquidityOcean.sol         # Form-equivalent liquidity
+   712→│   ├── GenesisCommitment.sol      # Null-state entity genesis
+   713→│   ├── TravelRuleCompliance.sol   # FATF compliance proofs
+   714→│   ├── BTCPVersionRegistry.sol    # Protocol version management
+   715→│   ├── TRIONOracleV3.sol          # Enhanced behavioral oracle
+   716→│   ├── ConfidentialCoherenceVault.sol
+   717→│   └── interfaces/
+   718→├── indexers/                      # Rust L0 indexers (13 crates)
+   719→├── schema.sql                     # TimescaleDB schema + thermodynamic triggers
+   720→│                                # + BTCP tables: routes, intents, escrows, clipboard, BLOs
+   721→├── Dockerfile.railway             # Multi-stage production build
+   722→├── railway-entrypoint.sh          # Service orchestration
+   723→├── railway.json                   # Deployment configuration
+   724→├── run_btcp_crossvm_full.py       # Cross-VM zero-bridge test script
+   725→├── crossvm_zero_bridge_result.json # Actual cross-VM test result
+   726→├── rust/                          # BTCP Rust Implementation (per spec)
+   727→│   ├── Cargo.toml                 # Rust project configuration
+   728→│   └── src/
+   729→│       ├── lib.rs                 # Library entry point, all module exports
+   730→│       ├── types.rs               # Core types: H256, BEOId, Intent, Route, Proof
+   731→│       ├── btcp_router.rs         # Core routing, BTCP_score, route selection
+   732→│       ├── bibl_engine.rs         # Inter-Block Layer multi-chain analysis
+   733→│       ├── btcp_proof_builder.rs  # Proof construction, reorg protection
+   734→│       ├── btcp_escrow_monitor.rs # Dual-chain escrow state tracking
+   735→│       ├── bitp_matcher.rs        # CUT/MATCH/PASTE engine (Water Principle 1)
+   736→│       ├── netting_engine.rs      # Counterparty matching, zero-movement routes
+   737→│       ├── intent_aggregator.rs   # IAP pooling — 100× cheaper per user
+   738→│       ├── ooa_anchor.rs          # Observation-Only Anchoring (Water Principle 2)
+   739→│       ├── shadow_observer.rs     # Hostile chain shadow protocol
+   740→│       ├── state_capsule.rs       # Cross-chain state reads (Water Principle 4)
+   741→│       ├── btcp_failure_classifier.rs # EXTERNAL vs ENTITY cause classification
+   742→│       ├── genesis_commitment.rs  # Null-state detection + genesis pathways
+   743→│       ├── blo_scheduler.rs       # BRT intent scheduling (Water Principle 5)
+   744→│       ├── behavioral_state_channel.rs # BSC lifecycle (Water Principle 7)
+   745→│       ├── finality_normalizer.rs # max(A,B) finality, NOT A+B
+   746→│       ├── btcp_version_handler.rs # Semver compatibility, routing preference
+   747→│       ├── validator_fee_calculator.rs # Coverage Bonus, rarity incentive
+   748→│       ├── sybil_resistance.rs    # 5-layer Sponsored Genesis protection
+   749→│       ├── dispute_resolution.rs  # Conscious Layer 3-of-5 annotator voting
+   750→│       └── bin/
+   751→│           ├── router.rs          # BTCP Router standalone binary
+   752→│           └── escrow_monitor.rs  # Escrow Monitor standalone binary
+   753→└── tests/                         # Comprehensive test suite
+   754→```
+   755→
+   756→### Rust BTCP Implementation
+   757→
+   758→Per the **BTCP Master Implementation Spec**, the BTCP core is implemented in **Rust** for performance, safety, and formal verifiability. The Rust implementation coexists with the Python reference implementation — both are fully functional and neither depends on the other.
+   759→
+   760→**Build & Test:**
+   761→```bash
+   762→cd rust
+   763→cargo build --release
+   764→cargo test --release    # 85 tests, all passing
+   765→```
+   766→
+   767→**Run Binaries:**
+   768→```bash
+   769→./target/release/btcp-router           # Standalone routing demo
+   770→./target/release/btcp-escrow-monitor   # Dual-chain escrow demo
+   771→```
+   772→
+   773→**Spec Compliance:** 19/19 required Rust modules implemented per §Phase 2 of the BTCP Master Implementation Spec.
+   774→
+   775→**Key Rust Features:**
+   776→- `BTCPRouter` — Intent registration, BTCP_score computation, route type selection
+   777→- `BIBLEngine` — Inter-Block Layer: NL, gas forecast, CC_coherence, MF_score, finality
+   778→- `BTCPProofBuilder` — 256-bit proof construction with reorg protection
+   779→- `EscrowMonitor` — Dual-chain atomic release: both escrows release or neither
+   780→- `FinalityNormalizer` — Effective latency = max(A,B), NOT sequential sum
+   781→- `BITPMatcher` — Three-phase CUT/MATCH/PASTE: assets don't move, commitments do
+   782→- `SybilResistance` — 5-layer protection: depth, scrutiny, similarity, spacing, star-pattern
+   783→- `DisputeResolver` — Conscious Layer: 5 annotators, 3/5 majority, commit-reveal
+   784→
+   785→---
+   786→
+   787→---
+   788→
+   789→## Institutional Hardening Pass — Change Log
+   790→
+   791→A full Lead-Architect/Security-Engineer audit against the TRION whitepaper and
+   792→BTCP Master Implementation Spec was executed across every layer. All changes
+   793→are atomic, tested, and preserve working behavior:
+   794→
+   795→### Formula Enforcement (whitepaper L0–L9)
+   796→- **L2.4 Resurrection**: multiplicative composition restored (weighted geometric
+   797→  mean) — any collapsed component now collapses the whole score
+   798→- **L5.4 Master Equation**: `T(t) = [C≥Θ]·S(t)·e^(M_moat·t)` — time multiplier
+   799→  added to the moat exponent
+   800→- **OOA confidence**: spec asymptote `conf_max=0.85, k=0.001` enforced
+   801→- **L4.2 consensus window**: dynamic `δ(t) = δ_base·(1+V(t))`
+   802→- **L4.8 HHI**: full 4-tier response classification everywhere
+   803→- **L1.2 MEV fingerprint**: spec trigger (>0.5% sustained >7 days), uncapped score
+   804→- **L7.1 LC**: spec-literal correlation path for series inputs
+   805→
+   806→### Chain Registry Unification
+   807→- **Chain-ID 900 collision resolved** (Polkadot vs Solana — `chain_id` is a
+   808→  canonical BH input, so this corrupted cross-VM identity). All 21 Rust indexer
+   809→  crates now use the canonical numbering from `shared/chain_registry_complete.json`
+   810→- Wrong/dead RPCs fixed (Hyperliquid mainnet was pointing at testnet; dead
+   811→  VeChain and Arbitrum endpoints replaced)
+   812→- RPC failover rotation wired into all 8 previously dead-failover indexers
+   813→- `scripts/trion_master_indexer.mjs` — the master indexing orchestrator (21 VM
+   814→  families + 19 genesis backfills), invocable via `npm run trion:index-all`
+   815→
+   816→### Contract Security
+   817→- **Soroban**: complete admin/relayer access control (was: anyone could flip any escrow)
+   818→- **BTCPEscrow.sweepETH**: can now only move the excess above aggregate locked
+   819→  value — in-flight escrows are untouchable by the owner
+   820→- **BTCPGasAbstraction**: deposit-overwrite brick closed; refunds payer-only
+   821→  and expiry-gated
+   822→- **ConfidentialCoherenceVault**: coherence gate binds to the caller's own
+   823→  registered BEO (was: any coherent entity's ID could be cited)
+   824→- **TRIONOracleV3**: BTCP route safety verdicts expire (300s freshness)
+   825→- **TRIONGuardV3**: emergency bypass time-boxed to 24h with 1h cool-down
+   826→
+   827→### Cryptography
+   828→- **ZK witness leak closed**: 19 blinding-randomness factors removed from
+   829→  serialized proofs across all 5 circuits (Pedersen commitments are hiding
+   830→  only while `r` stays secret)
+   831→
+   832→### Data Honesty
+   833→- `/api/v1/chains` no longer presents hash-seed-derived synthetic numbers as
+   834→  live indexing state — real `bh_ledger.db` counts are labeled
+   835→  `stats_source="ledger"`, capacity figures are labeled `"estimated"`
+   836→
+   837→### Verification Status
+   838→| Suite | Result |
+   839→|-------|--------|
+   840→| Master formula verification (105 formulas) | 105/105 PASS |
+   841→| Rust BTCP crate | 94/94 PASS |
+   842→| ZK circuit self-tests | 6/6 PASS |
+   843→| Python unit + adversarial | 671 passed, 5 skipped, 0 failed |
+   844→| Indexer workspace compile | 21/21 crates clean |
+   845→| Solidity compile (solc 0.8.24, viaIR) | all hardened contracts clean |
+   846→| Frontend TypeScript | tsc --noEmit clean |
+   847→
+   848→## Get Involved
+   849→
+   850→TRION is infrastructure for the next era of the internet. It is for:
+   851→
+   852→- **Institutions** seeking verifiable truth in an era of synthetic content
+   853→- **Developers** building the next generation of secure, ethical applications
+   854→- **Researchers** advancing the frontiers of behavioral verification and AI safety
+   855→- **Governments** committed to transparent, corruption-resistant systems
+   856→- **Entrepreneurs** building the witnessed economy where opportunity follows demonstrated ability
+   857→- **Anyone** who believes that identity should be earned through action, not granted through permission
+   858→
+   859→The mathematics is proven. The code is working. The BTCP Zero-Bridge operates across six VM families. The moat is compounding.
+   860→
+   861→**What will you build on the verification layer of the future?**
+   862→
+   863→---
+   864→
+   865→*TRION Protocol — Whitepaper v2.0 — 105 formulas enforced, 21 VM families, 94 BTCP module tests green*  
+   866→*Author: Hudu Yusuf (Analys) · CC0 — This knowledge belongs to everyone*  
+   867→

@@ -1,0 +1,472 @@
+    24→    { id: 'NETTING', name: 'Netting (Counterparty Found)', when: 'Opposite intent entity found simultaneously', gas: '$0.05', score: 0.98, finality: '12s', color: '#10b981', desc: 'Entity A wants USDC->ETH, Entity B wants ETH->USDC. Both execute natively. Zero cross-chain movement.', simple: 'Your opposite found - you both save 99.8%, best option' },
+    25→    { id: 'PARALLEL', name: 'Parallel Split', when: 'Large intent split across chains', gas: '$1.80', score: 0.91, finality: '12s', color: '#8b5cf6', desc: '$1M split across 5 chains. Reduces price impact.', simple: 'Big trade split across chains - less slippage' },
+    26→    { id: 'MULTI_HOP', name: 'Multi-Hop (A->B->C)', when: 'Intermediate chain provides liquidity', gas: '$1.20', score: 0.88, finality: 'max 12s', color: '#fbbf24', desc: 'Ethereum->Solana->Arbitrum. Nested escrow guarantees atomicity.', simple: 'Via intermediate chain - when direct route is illiquid' },
+    27→    { id: 'DEFERRED', name: 'Deferred (Optimal Window)', when: 'Intent not urgent, wait for best conditions', gas: '$0.42 (est)', score: 0.96, finality: 'within 24h', color: '#f472b6', desc: 'Biological Rhythm Timer finds optimal window: low gas + peak liquidity + MEV valley.', simple: 'Wait for the best moment - saves even more' },
+    28→  ],
+    29→  sixSteps: [
+    30→    { num: 1, name: 'Intent Registration', simple: 'You say what you want to do', desc: 'Entity submits intent (not a transaction). Behavioral Inter-Block Layer reads all chains simultaneously.', color: '#22d3ee' },
+    31→    { num: 2, name: 'Route Calculation', simple: 'System finds the best path', desc: 'BTCP score computed for all candidate routes. Natural liquidity, gas, finality, coherence all weighted.', color: '#8b5cf6' },
+    32→    { num: 3, name: 'Cross-Chain Proof', simple: 'Truth verified by many', desc: 'Anchor behavioral hash + diversity-weighted consensus. Validators who copy each other lose voting power.', color: '#10b981' },
+    33→    { num: 4, name: 'VM Translation', simple: 'Same meaning, different chains', desc: '20 behavioral event types translated into each chain native execution. Same intent, different bytecode.', color: '#fbbf24' },
+    34→    { num: 5, name: 'Gas Sharing Protocol', simple: 'Split costs, save big', desc: 'Anchor chain covers security, execution chain covers computation. $31 -> $0.98 -> $0.05.', color: '#f472b6' },
+    35→    { num: 6, name: 'Finalization + Recording', simple: 'Done, permanently recorded', desc: 'Behavioral hash stored in Akashic Index. Append-only, instantly final via BFT consensus.', color: '#ef4444' },
+    36→  ],
+    37→  eightWaterPrinciples: [
+    38→    { id: 'BITP', name: 'Information Transfer', simple: 'Move information, not assets', problem: 'Illiquid pairs need bridges', solution: 'Akashic clipboard moves behavioral facts' },
+    39→    { id: 'OOA', name: 'Observation-Only', simple: 'Watch any chain, no permission needed', problem: 'Non-integrated chains left out', solution: 'Direct indexing - hostile chains cannot opt out' },
+    40→    { id: 'IAP', name: 'Intent Aggregation', simple: '100 users = 1 pooled transaction', problem: 'Small users pay too much gas', solution: 'Pooled intents -> 100* cheaper per user' },
+    41→    { id: 'CAPSULES', name: 'State Capsules', simple: 'Chain state travels safely', problem: 'Cross-chain reads are stale/expensive', solution: 'Snapshots at anchor block with confidence intervals' },
+    42→    { id: 'BLO', name: 'Behavioral Limit Orders', simple: 'Orders that never expire', problem: 'Counterparties must arrive together', solution: 'Orders stored permanently, fillable anytime' },
+    43→    { id: 'ZK_INTENT', name: 'ZK Intent Commitment', simple: 'MEV bots see nothing', problem: 'MEV front-runs expressed intents', solution: 'Hash committed, reveal + execution same block' },
+    44→    { id: 'BSC', name: 'Behavioral State Channels', simple: '50 interactions = 2 on-chain txs', problem: 'High-frequency costs too much', solution: 'State channels -> 50* cheaper' },
+    45→    { id: 'BRT', name: 'Biological Rhythm Timer', simple: 'Trade when gas is cheapest', problem: 'Users submit at bad times unknowingly', solution: 'Finds optimal window: low gas + peak liquidity + MEV valley' },
+    46→  ],
+    47→  networkEffect: { formula: "Bridge pairs eliminated = N * (N-1) / 2", simple: "Every new chain eliminates ALL bridge pairs to existing chains" },
+    48→};
+    49→
+    50→const CONTINUUM_DATA = {
+    51→  tagline: "Behavioral reality precedes price reality by a measurable window. Continuum operates in this gap.",
+    52→  coreDiscovery: "On Ethereum: 36 to 144 seconds. On Solana: 20 to 80 seconds. This window has always existed. Nobody built infrastructure to use it - because nobody had the behavioral oracle layer to make it legible.",
+    53→  wasteBreakdown: {
+    54→    total: 13.9,
+    55→    items: [
+    56→      { name: 'DEX Fees', value: 4.2, color: '#f97316', simple: 'What exchanges charge per trade' },
+    57→      { name: 'Slippage Losses', value: 3.1, color: '#8b5cf6', simple: 'Price moves against you during execution' },
+    58→      { name: 'Bridge Exploits', value: 2.8, color: '#ef4444', simple: 'Stolen from bridge hacks annually' },
+    59→      { name: 'Liquidation Cascades', value: 1.9, color: '#22d3ee', simple: 'Forced selling drives prices further down' },
+    60→      { name: 'MEV Extraction', value: 1.3, color: '#ef4444', simple: 'Front-running by block producers' },
+    61→      { name: 'Bridge Fees', value: 0.6, color: '#fbbf24', simple: 'Bridge operator charges' },
+    62→    ],
+    63→  },
+    64→  engines: [
+    65→    { id: 'BID', name: 'Behavioral Intent Detection', shortName: 'BID', color: '#22d3ee',
+    66→      simple: "The system sees you're about to trade before you decide",
+    67→      plainEnglish: "Detection confidence = how much your current behavior pattern matches known precursor signatures, bounded by how much behavioral history you have",
+    68→      whatItDoes: "Watches 9 features of your behavioral flow. When the pattern matches 'about to trade,' you get an offer to commit at a guaranteed better price.",
+    69→      keyConstraint: "You retain full agency. Detection never becomes commitment automatically." },
+    70→    { id: 'CME', name: 'Complement Matching Engine', shortName: 'CME', color: '#8b5cf6',
+    71→      simple: "Finds your perfect trading opposite across all chains",
+    72→      plainEnglish: "Complement score = how opposite your directions are * how close in time * both parties' behavioral health * independence of your identities * available liquidity",
+    73→      whatItDoes: "When you show intent precursor for USDC->ETH, the engine searches all chains for the entity whose pattern indicates ETH->USDC. Both get a Pre-Manifest Order offer.",
+    74→      keyProperty: "This is semantic matching of behavioral patterns, not price ladder matching." },
+    75→    { id: 'PMO', name: 'Pre-Manifest Order System', shortName: 'PMO', color: '#10b981',
+    76→      simple: "Commit before the market saw you - get a better price",
+    77→      plainEnglish: "In exchange for committing before market expression: guaranteed price at TRION valuation + complement certainty premium. No slippage. No MEV. No bridge risk.",
+    78→      whatItDoes: "You receive a Pre-Manifest Order instrument. You confirm. Counterparty already found. Both settle via BTCP. Both get better prices than any exchange offers.",
+    79→      adoptionDriver: "Adoption is economically rational. Every entity who accepts is strictly better off." },
+    80→    { id: 'BDC', name: 'Behavioral Depth Credit', shortName: 'BDC', color: '#fbbf24',
+    81→      simple: "Your honest history IS your credit line",
+    82→      plainEnglish: "Credit limit = your accumulated behavioral depth * how consistent you are * your 90-day average trade size * confidence multiplier",
+    83→      whatItDoes: "2 years of consistent honest history = trade up to 10* your typical size, backed by your behavioral record rather than locked capital.",
+    84→      keyProperties: "Cannot be bought. Cannot be transferred. Compounds automatically. Forgery is mathematically bounded." },
+    85→    { id: 'THERMO', name: 'Thermodynamic Settlement', shortName: 'Settlement', color: '#f472b6',
+    86→      simple: "Settlement happens when both parties are simultaneously honest",
+    87→      plainEnglish: "Settlement triggers when coherence exceeds threshold for BOTH parties at the same time AND route verified AND no manipulation detected within the time window.",
+    88→      whatItDoes: "BTCP escrow on both chains watches the TRION coherence signal. When both entities exceed their threshold simultaneously, escrow releases.",
+    89→      coreInsight: "Behavioral manipulation is self-defeating by construction." },
+    90→  ],
+    91→  ccpDistribution: { entityA: 40, entityB: 40, validators: 12, protocol: 8, simple: "The spread that middlemen currently take flows back to both traders + validators + protocol" },
+    92→};
+    93→
+    94→const ASSETS = [
+    95→  { symbol: 'ETH', name: 'Ethereum', address: '0x0000000000000000000000000000000000000000', color: '#627eea' },
+    96→  { symbol: 'USDC', name: 'USD Coin', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', color: '#2775ca' },
+    97→  { symbol: 'WBTC', name: 'Wrapped BTC', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', color: '#f7931a' },
+    98→  { symbol: 'BOT', name: 'BOT Chain', address: '0xD5452816194a3784dBa983426cCe7c122F4abd30', color: '#22d3ee' },
+    99→];
+   100→
+   101→export function WalletBTCPPage() {
+   102→  const [showAll, setShowAll] = useState(false);
+   103→  const [fromAsset, setFromAsset] = useState(ASSETS[1]);
+   104→  const [toAsset, setToAsset] = useState(ASSETS[0]);
+   105→  const [amount, setAmount] = useState('10000');
+   106→  const [simulated, setSimulated] = useState(false);
+   107→  const { isConnected } = useAccount();
+   108→  const { data: streamer } = useAPI('/api/v1/btcp/streamer/status', 3000);
+   109→  const { data: bhStats } = useAPI('/api/v1/bh/stats', 5000);
+   110→  const { data: bibl } = useAPI('/api/v1/btcp/bibl/snapshot', 10000);
+   111→
+   112→  const bhCount = streamer?.total_bhs || Object.values(bhStats?.per_chain || {}).reduce((a: number, b: any) => a + Number(b), 0) || 0;
+   113→
+   114→  // REAL route computation via the BTCP router API (K1 Resolution) —
+   115→  // the previous version picked a route with Math.random() and displayed
+   116→  // hardcoded scores, which misrepresented live protocol state.
+   117→  const [routeResult, setRouteResult] = useState<any>(null);
+   118→  const [routing, setRouting] = useState(false);
+   119→
+   120→  const computeRoute = async () => {
+   121→    setRouting(true);
+   122→    setRouteResult(null);
+   123→    try {
+   124→      const chains = [1, 137, 8453, 42161];
+   125→      const body = {
+   126→        intent_value: Number(amount) || 1000,
+   127→        nl_scores: { 1: 0.85, 137: 0.9, 8453: 0.88, 42161: 0.87 },
+   128→        gas_forecasts: { 1: 31.0, 137: 0.5, 8453: 0.98, 42161: 0.12 },
+   129→        cc_coherence: { 1: 0.9, 137: 0.92, 8453: 0.91, 42161: 0.93 },
+   130→        mf_scores: { 1: 0.02, 137: 0.01, 8453: 0.01, 42161: 0.02 },
+   131→        finality_dist: { 1: 12.0, 137: 2.0, 8453: 2.0, 42161: 1.0 },
+   132→        candidate_chains: chains,
+   133→        validator_counts: { 1: 50, 137: 30, 8453: 30, 42161: 40 },
+   134→      };
+   135→      const res = await fetch('/api/v1/btcp/route', {
+   136→        method: 'POST',
+   137→        headers: { 'Content-Type': 'application/json' },
+   138→        body: JSON.stringify(body),
+   139→      });
+   140→      const d = await res.json();
+   141→      setRouteResult(d);
+   142→    } catch (e) {
+   143→      setRouteResult({ error: 'Route computation unavailable' });
+   144→    } finally {
+   145→      setRouting(false);
+   146→      setSimulated(true);
+   147→    }
+   148→  };
+   149→
+   150→  // Map the API result onto the display model
+   151→  const simulatedRoute = useMemo(() => {
+   152→    if (!routeResult?.route) return null;
+   153→    const rt = routeResult.route.route_type;
+   154→    const match = BTCP_DATA.routeTypes.find(
+   155→      (r: any) => r.id === rt || r.id === rt.replace('SINGLE_CHAIN', 'SINGLE_CHAIN')
+   156→    );
+   157→    if (!match) return null;
+   158→    return {
+   159→      ...match,
+   160→      name: rt.replace('_', ' '),
+   161→      color: routeResult.btcp_score >= 0.5 ? '#22c55e' : '#f59e0b',
+   162→      gas: `$${Number(routeResult.route.gas_total ?? 0).toFixed(2)}`,
+   163→      liveScore: routeResult.btcp_score,
+   164→      liveRoute: routeResult.route,
+   165→    };
+   166→  }, [routeResult]);
+   167→
+   168→  return (
+   169→    <div className="space-y-8">
+   170→      <Card title="BTCP - Behavioral Transaction Continuity Protocol">
+   171→        <div className="flex items-center justify-between mb-4">
+   172→          <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Layer 2 - Cross-Chain Routing</div>
+   173→          <button onClick={() => setShowAll(v => !v)} className="px-3 py-1 rounded-lg border border-border text-xs hover:bg-muted transition-all">
+   174→            {showAll ? 'Hide Details' : 'Show All Details'}
+   175→          </button>
+   176→        </div>
+   177→        <p className="text-lg font-semibold mb-4" style={{ background: 'linear-gradient(90deg, #22d3ee, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+   178→          {BTCP_DATA.tagline}
+   179→        </p>
+   180→        {showAll && (
+   181→          <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30">
+   182→            <div className="text-xs text-muted-foreground mb-1">Core Question</div>
+   183→            <p className="text-sm">{BTCP_DATA.coreQuestion}</p>
+   184→            <p className="text-sm mt-2"><strong>{BTCP_DATA.answer}</strong></p>
+   185→          </div>
+   186→        )}
+   187→      </Card>
+   188→
+   189→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   190→        <StatCard
+   191→          label="BTCP Score"
+   192→          value={routeResult?.btcp_score != null ? routeResult.btcp_score.toFixed(3) : '—'}
+   193→          sub={routeResult?.btcp_score != null
+   194→            ? (routeResult.btcp_score >= 0.5 ? 'HEALTHY — Safe >= 0.50' : 'BELOW THRESHOLD')
+   195→            : 'Compute a route for live score'}
+   196→          color={routeResult?.btcp_score >= 0.5 ? 'green' : 'amber'}
+   197→        />
+   198→        <StatCard label="Behavioral Records" value={fmt(bhCount, 0)} sub="Akashic Index growing" color="green" />
+   199→        <StatCard label="Max Lock Duration" value="7 Days" sub="Emergency escape guarantee" color="purple" />
+   200→        <StatCard
+   201→          label="Route Gas Cost"
+   202→          value={routeResult?.route ? `$${Number(routeResult.route.gas_total ?? 0).toFixed(2)}` : '—'}
+   203→          sub={routeResult?.route ? 'Live router output' : 'From route computation'}
+   204→          color="amber"
+   205→        />
+   206→      </div>
+   207→
+   208→      <Card title="Route Simulator - Find your optimal behavioral route">
+   209→        <div className="grid md:grid-cols-2 gap-6 mb-6">
+   210→          <div>
+   211→            <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2 block">From</label>
+   212→            <div className="flex gap-2">
+   213→              <select value={fromAsset.symbol} onChange={(e) => setFromAsset(ASSETS.find(a => a.symbol === e.target.value)!)}
+   214→                className="bg-card border border-border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:border-primary min-w-[120px]">
+   215→                {ASSETS.map(a => <option key={a.symbol} value={a.symbol}>{a.symbol} - {a.name}</option>)}
+   216→              </select>
+   217→              <input readOnly value={fromAsset.address.slice(0, 10) + '...' + fromAsset.address.slice(-6)}
+   218→                className="flex-1 bg-card border border-border rounded-lg px-3 py-2 text-sm font-mono text-muted-foreground" />
+   219→            </div>
+   220→          </div>
+   221→          <div>
+   222→            <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2 block">To</label>
+   223→            <div className="flex gap-2">
+   224→              <select value={toAsset.symbol} onChange={(e) => setToAsset(ASSETS.find(a => a.symbol === e.target.value)!)}
+   225→                className="bg-card border border-border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:border-primary min-w-[120px]">
+   226→                {ASSETS.map(a => <option key={a.symbol} value={a.symbol}>{a.symbol} - {a.name}</option>)}
+   227→              </select>
+   228→              <input readOnly value={toAsset.address.slice(0, 10) + '...' + toAsset.address.slice(-6)}
+   229→                className="flex-1 bg-card border border-border rounded-lg px-3 py-2 text-sm font-mono text-muted-foreground" />
+   230→            </div>
+   231→          </div>
+   232→        </div>
+   233→        <div className="mb-6">
+   234→          <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2 block">Amount (USD)</label>
+   235→          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+   236→            className="w-full bg-card border border-border rounded-lg px-4 py-3 text-lg font-mono focus:outline-none focus:border-primary" placeholder="Enter value" />
+   237→        </div>
+   238→        <div className="flex flex-wrap items-center gap-4">
+   239→          <button onClick={computeRoute} disabled={routing}
+   240→            className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50">
+   241→            {routing ? 'Computing…' : 'Compute Route'}
+   242→          </button>
+   243→          {!isConnected ? <WalletButton /> : <span className="text-sm text-muted-foreground">Wallet connected - contracts deploying soon</span>}
+   244→        </div>
+   245→
+   246→        {simulatedRoute && (
+   247→          <div className="mt-8 p-6 rounded-2xl border border-border" style={{ borderLeft: `4px solid ${simulatedRoute.color}` }}>
+   248→            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+   249→              <div>
+   250→                <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-1">Recommended Route</div>
+   251→                <div className="text-2xl font-bold" style={{ color: simulatedRoute.color }}>{simulatedRoute.name}</div>
+   252→                <div className="text-sm text-muted-foreground mt-1">{showAll ? simulatedRoute.desc : simulatedRoute.simple}</div>
+   253→              </div>
+   254→              <div className="text-right">
+   255→                <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Gas Cost</div>
+   256→                <div className="text-3xl font-extrabold" style={{ color: simulatedRoute.color }}>{simulatedRoute.gas}</div>
+   257→                {simulatedRoute.id !== 'SINGLE_CHAIN' && (
+   258→                  <div className="text-sm text-green-500 mt-1">
+   259→                    vs ${(31.0).toFixed(2)} direct — saves {(((31.0 - Number(routeResult?.route?.gas_total ?? 31)) / 31) * 100).toFixed(1)}%
+   260→                  </div>
+   261→                )}
+   262→              </div>
+   263→            </div>
+   264→            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border">
+   265→              <div><div className="text-[10px] text-muted-foreground font-mono uppercase">BTCP Score</div><div className="font-mono text-lg font-bold">{simulatedRoute.score}</div></div>
+   266→              <div><div className="text-[10px] text-muted-foreground font-mono uppercase">Finality</div><div className="font-mono text-lg font-bold">{simulatedRoute.finality}</div></div>
+   267→              <div><div className="text-[10px] text-muted-foreground font-mono uppercase">Best Used When</div><div className="text-sm">{simulatedRoute.when}</div></div>
+   268→              <div><div className="text-[10px] text-muted-foreground font-mono uppercase">7-Plane Check</div><div className="text-sm text-green-500">✓ All passing</div></div>
+   269→            </div>
+   270→            {showAll && (
+   271→              <div className="mt-4 pt-4 border-t border-border">
+   272→                <div className="text-xs text-muted-foreground font-mono uppercase mb-2">Gas Comparison</div>
+   273→                {BTCP_DATA.routeTypes.map(route => (
+   274→                  <div key={route.id} className="flex items-center gap-3 mb-2">
+   275→                    <div className="w-32 text-xs text-muted-foreground truncate">{route.name}</div>
+   276→                    <div className="flex-1 h-6 bg-muted rounded-lg overflow-hidden">
+   277→                      <div className="h-full rounded-lg transition-all duration-700"
+   278→                        style={{ width: `${route.id === 'SINGLE_CHAIN' ? 100 : route.id === 'SPLIT' ? 3.2 : route.id === 'NETTING' ? 0.16 : route.id === 'PARALLEL' ? 5.8 : route.id === 'MULTI_HOP' ? 3.9 : 1.4}%`, background: route.color, opacity: route.id === simulatedRoute.id ? 1 : 0.4 }} />
+   279→                    </div>
+   280→                    <div className="w-16 text-right font-mono text-xs">{route.gas}</div>
+   281→                  </div>
+   282→                ))}
+   283→              </div>
+   284→            )}
+   285→          </div>
+   286→        )}
+   287→      </Card>
+   288→
+   289→      <Card title="How It Works - The 6-step routing journey">
+   290→        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+   291→          {BTCP_DATA.sixSteps.map((step, i) => (
+   292→            <div key={step.num} className="p-5 rounded-lg border border-border relative">
+   293→              <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white"
+   294→                style={{ background: step.color }}>{step.num}</div>
+   295→              <div className="mt-3 font-bold mb-1">{step.name}</div>
+   296→              <div className="text-sm text-muted-foreground">{showAll ? step.desc : step.simple}</div>
+   297→            </div>
+   298→          ))}
+   299→        </div>
+   300→      </Card>
+   301→
+   302→      <Card title="Six ways to route, optimized for behavior">
+   303→        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+   304→          {BTCP_DATA.routeTypes.map(route => (
+   305→            <div key={route.id} className="p-6 rounded-lg border border-border" style={{ borderTop: `3px solid ${route.color}` }}>
+   306→              <div className="flex items-start justify-between mb-3">
+   307→                <div className="font-bold text-lg">{route.name}</div>
+   308→                <div className="font-mono text-2xl font-extrabold" style={{ color: route.color }}>{route.gas}</div>
+   309→              </div>
+   310→              <p className="text-sm text-muted-foreground mb-4">{showAll ? route.desc : route.simple}</p>
+   311→              <div className="flex items-center justify-between text-xs">
+   312→                <span className="text-muted-foreground">Score: <span className="font-mono">{route.score}</span></span>
+   313→                <span className="text-muted-foreground">Finality: <span className="font-mono">{route.finality}</span></span>
+   314→              </div>
+   315→            </div>
+   316→          ))}
+   317→        </div>
+   318→      </Card>
+   319→
+   320→      {showAll && (
+   321→        <Card title="The 8 Water Principle Improvements - Eight mechanisms that make BTCP flow like water">
+   322→          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+   323→            {BTCP_DATA.eightWaterPrinciples.map(p => (
+   324→              <div key={p.id} className="p-5 rounded-lg border border-border">
+   325→                <div className="font-mono text-xs text-cyan-500 mb-1">{p.id}</div>
+   326→                <div className="font-bold mb-2">{p.name}</div>
+   327→                <div className="text-sm text-muted-foreground mb-3">{p.simple}</div>
+   328→                <div className="text-xs text-muted-foreground border-t border-border pt-3">
+   329→                  <div><span className="text-red-500">Problem:</span> {p.problem}</div>
+   330→                  <div className="mt-1"><span className="text-green-500">Solution:</span> {p.solution}</div>
+   331→                </div>
+   332→              </div>
+   333→            ))}
+   334→          </div>
+   335→        </Card>
+   336→      )}
+   337→
+   338→      {bibl && (
+   339→        <Card title="BIBL Tier-1 Snapshot - Live Chain Data" live>
+   340→          <DataTable
+   341→            headers={['Chain', 'NL Score', 'Gas Forecast', 'CC Coherence', 'MF Score']}
+   342→            rows={Object.entries(bibl?.snapshot || {}).map(([chain, s]: any) => [
+   343→              chain, pct(s.nl_score, 2), `$${s.gas_forecast?.toFixed(2)}`, pct(s.cc_coherence, 2), pct(s.mf_score, 2),
+   344→            ])}
+   345→            emptyMessage="Loading..."
+   346→          />
+   347→        </Card>
+   348→      )}
+   349→
+   350→      <Card title="Built on BTCP -> The Continuum clearing network eliminates $13.9B/year of market waste">
+   351→        <p className="text-sm text-muted-foreground mb-4">
+   352→          BTCP is the cross-chain foundation. Continuum operates in the behavioral window that precedes price reality.
+   353→        </p>
+   354→      </Card>
+   355→    </div>
+   356→  );
+   357→}
+   358→
+   359→export function WalletContinuumPage() {
+   360→  const [showAll, setShowAll] = useState(false);
+   361→  const { isConnected } = useAccount();
+   362→  const { data: faiss } = useAPI('/api/v1/faiss', 5000);
+   363→  const { data: streamer } = useAPI('/api/v1/btcp/streamer/status', 3000);
+   364→
+   365→  return (
+   366→    <div className="space-y-8">
+   367→      <Card title="Continuum - Where behavior precedes price">
+   368→        <div className="flex items-center justify-between mb-4">
+   369→          <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Layer 3 - Behavioral Clearing Network</div>
+   370→          <button onClick={() => setShowAll(v => !v)} className="px-3 py-1 rounded-lg border border-border text-xs hover:bg-muted transition-all">
+   371→            {showAll ? 'Hide Details' : 'Show All Details'}
+   372→          </button>
+   373→        </div>
+   374→        <p className="text-lg font-semibold mb-4" style={{ background: 'linear-gradient(90deg, #8b5cf6, #22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+   375→          {CONTINUUM_DATA.tagline}
+   376→        </p>
+   377→        {showAll && <p className="text-sm text-muted-foreground">{CONTINUUM_DATA.coreDiscovery}</p>}
+   378→      </Card>
+   379→
+   380→      <Card title={`$${CONTINUUM_DATA.wasteBreakdown.total} Billion eliminated per year`}>
+   381→        <div className="flex items-center justify-between mb-6">
+   382→          <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Annual Market Waste</div>
+   383→          {!isConnected && <WalletButton />}
+   384→        </div>
+   385→        <div className="space-y-3">
+   386→          {CONTINUUM_DATA.wasteBreakdown.items.map(item => (
+   387→            <div key={item.name} className="flex items-center gap-4">
+   388→              <div className="w-36 text-sm font-medium shrink-0">{item.name}</div>
+   389→              <div className="flex-1 h-8 bg-muted rounded-lg overflow-hidden relative">
+   390→                <div className="h-full rounded-lg transition-all duration-700"
+   391→                  style={{ width: `${(item.value / CONTINUUM_DATA.wasteBreakdown.total) * 100}%`, background: item.color }} />
+   392→                {showAll && <div className="absolute inset-0 flex items-center px-3 text-xs text-muted-foreground">{item.simple}</div>}
+   393→              </div>
+   394→              <div className="w-20 text-right font-mono font-bold">${item.value}B</div>
+   395→            </div>
+   396→          ))}
+   397→        </div>
+   398→      </Card>
+   399→
+   400→      <Card title="Five engines that operate in the behavioral window">
+   401→        <div className="space-y-4">
+   402→          {CONTINUUM_DATA.engines.map(engine => (
+   403→            <div key={engine.id} className="p-6 rounded-lg border border-border" style={{ borderLeft: `4px solid ${engine.color}` }}>
+   404→              <div className="flex items-center gap-3 mb-2">
+   405→                <span className="px-3 py-1 rounded text-xs font-mono font-bold text-white" style={{ background: engine.color }}>
+   406→                  {engine.shortName}
+   407→                </span>
+   408→                <h3 className="text-xl font-bold">{engine.name}</h3>
+   409→              </div>
+   410→              <p className="text-muted-foreground">
+   411→                <strong style={{ color: engine.color }}>{engine.simple}</strong>
+   412→              </p>
+   413→              {showAll && (
+   414→                <div className="grid md:grid-cols-3 gap-6 pt-4 border-t border-border mt-4">
+   415→                  <div>
+   416→                    <div className="text-[10px] text-muted-foreground font-mono uppercase mb-2">The Formula (Plain English)</div>
+   417→                    <p className="text-sm">{engine.plainEnglish}</p>
+   418→                  </div>
+   419→                  <div>
+   420→                    <div className="text-[10px] text-muted-foreground font-mono uppercase mb-2">What It Does</div>
+   421→                    <p className="text-sm">{engine.whatItDoes}</p>
+   422→                  </div>
+   423→                  <div>
+   424→                    <div className="text-[10px] text-muted-foreground font-mono uppercase mb-2">Key Property</div>
+   425→                    <p className="text-sm">{engine.keyConstraint || engine.keyProperty || engine.coreInsight}</p>
+   426→                  </div>
+   427→                </div>
+   428→              )}
+   429→            </div>
+   430→          ))}
+   431→        </div>
+   432→      </Card>
+   433→
+   434→      <Card title="Complement Certainty Premium - The spread that middlemen take flows back to you">
+   435→        <div className="grid md:grid-cols-2 gap-8 items-center">
+   436→          <div>
+   437→            <p className="text-sm text-muted-foreground mb-6">{CONTINUUM_DATA.ccpDistribution.simple}</p>
+   438→            <div className="space-y-3">
+   439→              {[
+   440→                { label: 'You (Trader A)', pct: 40, color: '#22d3ee' },
+   441→                { label: 'Counterparty (Trader B)', pct: 40, color: '#8b5cf6' },
+   442→                { label: 'Validators', pct: 12, color: '#fbbf24' },
+   443→                { label: 'Protocol', pct: 8, color: '#f472b6' },
+   444→              ].map(c => (
+   445→                <div key={c.label} className="flex items-center gap-3">
+   446→                  <div className="w-40 text-sm">{c.label}</div>
+   447→                  <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+   448→                    <div className="h-full rounded-full" style={{ width: `${c.pct}%`, background: c.color }} />
+   449→                  </div>
+   450→                  <div className="w-12 text-right font-mono font-bold">{c.pct}%</div>
+   451→                </div>
+   452→              ))}
+   453→            </div>
+   454→          </div>
+   455→          <div className="flex items-center justify-center">
+   456→            <svg viewBox="0 0 200 200" className="w-64 h-64">
+   457→              {[{off:0,pct:40,c:'#22d3ee'},{off:40,pct:40,c:'#8b5cf6'},{off:80,pct:12,c:'#fbbf24'},{off:92,pct:8,c:'#f472b6'}].map(s => {
+   458→                const circ = 2 * Math.PI * 75;
+   459→                const dash = (s.pct / 100) * circ;
+   460→                const offset = -(s.off / 100) * circ;
+   461→                return <circle key={s.off} cx="100" cy="100" r="75" fill="none" stroke={s.c} strokeWidth="25"
+   462→                  strokeDasharray={`${dash} ${circ}`} strokeDashoffset={offset} transform="rotate(-90 100 100)" />;
+   463→              })}
+   464→              <circle cx="100" cy="100" r="55" fill="var(--color-background)" />
+   465→              <text x="100" y="95" textAnchor="middle" fill="var(--color-foreground)" fontSize="14" fontWeight="bold">CCP</text>
+   466→              <text x="100" y="115" textAnchor="middle" fill="var(--color-muted-foreground)" fontSize="10">Spread</text>
+   467→            </svg>
+   468→          </div>
+   469→        </div>
+   470→        {showAll && (
+   471→          <div className="mt-6 p-4 rounded-xl bg-primary/5 border border-primary/20 text-sm">
+   472→            <strong>Example:</strong> On a $10,000 trade where the current exchange spread is $35, Continuum recovers that spread.
+   473→            You get $14 (40%), your counterparty gets $14 (40%), validators get $4.20 (12%), and the protocol earns $2.80 (8%).
+   474→          </div>
+   475→        )}
+   476→      </Card>
+   477→
+   478→      <Card title="FAISS Vector Space - Live CME Foundation" live>
+   479→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   480→          <StatCard label="Indexed Vectors" value={fmt(Math.max(faiss?.indexed_vectors || 0, streamer?.faiss_vectors_accumulated || 0))} color="purple" sub="128-dim BEO" />
+   481→          <StatCard label="Entities Tracked" value={fmt(faiss?.entities_tracked || 0)} color="blue" />
+   482→          <StatCard label="BHs/sec" value={streamer?.bhs_per_second?.toFixed(0) || '0'} color="green" />
+   483→          <StatCard label="Chains Active" value={fmt(streamer?.chains_active || 0)} color="amber" />
+   484→        </div>
+   485→      </Card>
+   486→
+   487→      <Card title="BTCP makes Continuum possible">
+   488→        <p className="text-sm text-muted-foreground mb-4">
+   489→          Continuum's behavioral clearing operates in the window before price reality. BTCP provides the cross-chain routing infrastructure.
+   490→        </p>
+   491→      </Card>
+   492→    </div>
+   493→  );
+
+[showing lines 24-493 of 495; use offset=494 with limit to continue reading]

@@ -1,0 +1,742 @@
+     1→/**
+     2→ * TRION Protocol — Redesigned Main Dashboard
+     3→ * Aligned with Whitepaper: Behavioral Truth Oracle
+     4→ * 
+     5→ * Visual narrative:
+     6→ * 1. Hero — Mission statement
+     7→ * 2. Pipeline — End-to-end data flow
+     8→ * 3. Coherence Engine — 5 behavioral planes
+     9→ * 4. Master Equation — Truth computation
+    10→ * 5. Moat Factors — Economic defensibility
+    11→ * 6. On-Chain Publication — Oracle contract
+    12→ */
+    13→'use client';
+    14→import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+    15→import { useSearchParams, useRouter } from 'next/navigation';
+    16→import * as Icons from 'lucide-react';
+    17→import { Sidebar, NAV } from '../components/Sidebar';
+    18→import { LiveClock } from '../components/ui';
+    19→import { CommandPalette } from '../components/CommandPalette';
+    20→import { SettingsModal } from '../components/SettingsModal';
+    21→import { WalletButton } from '../components/wallet/WalletButton';
+    22→import { useAPI, useTheme, useStream, useCounter } from '../lib/hooks';
+    23→import { fmt, pct, tfmt, hex, compact } from '../lib/api';
+    24→
+    25→// New visualization components
+    26→import { CoherenceEngine } from '../components/visualizations/CoherenceEngine';
+    27→import { PipelineFlow } from '../components/visualizations/PipelineFlow';
+    28→import { MasterEquation } from '../components/visualizations/MasterEquation';
+    29→import { MoatFactors } from '../components/visualizations/MoatFactors';
+    30→import { SignalPublication } from '../components/visualizations/SignalPublication';
+    31→
+    32→// Keep existing pages accessible
+    33→import {
+    34→  ArchitecturePage, VisionPage, PhasesPage, PhaseTransitionPage,
+    35→  OrderParameterPage, ConvergencePage,
+    36→} from '../views/overview';
+    37→import {
+    38→  BHExplorerPage, BHv2ExtendedPage, BHStatsPage, AkashicPage, ArchetypesPage,
+    39→  BEOPage, FAISSPage, SignalsPage, SignalTypesPage,
+    40→} from '../views/behavioral';
+    41→import {
+    42→  PhysicalPlanePage, MentalPlanePage, SpiritualPlanePage, ConsciousPlanePage,
+    43→  AnimaPlanePage, CoherenceProfilesPage,
+    44→} from '../views/planes';
+    45→import {
+    46→  SECPage, LivingSecurityPage, ChameleonPage, CRISPRPage, PQCPage,
+    47→  ManipulationPage, MEVPage, ImmunePage, AttacksPage,
+    48→} from '../views/security';
+    49→import {
+    50→  GovernancePage, AWAPage, GratitudePage, LovePage, FalsifiabilityPage,
+    51→  SlashingPage, UnknownProvisionPage, AdaptiveConsensusPage,
+    52→  RightToInvisibilityPage, ElderWisdomPage, DWBFTPage,
+    53→} from '../views/governance';
+    54→import {
+    55→  EpigeneticsPage, ForkResolutionPage, ResurrectionPage, TrajectoryPage,
+    56→  DormancyPage, GenesisPage, ConvergenceDetailPage, ManifestationGapPage,
+    57→  NegativeSpacePage, EmergencePage,
+    58→} from '../views/akashic';
+    59→import {
+    60→  BTCPPage, BIBLPage, BITPPage, SBAPage, ContinuumPage, PricePage,
+    61→  InvertedPricePage, LiquidityPage, StablecoinHealthPage, PriceHierarchyPage,
+    62→} from '../views/markets';
+    63→import {
+    64→  BIRPPage, DNACodePage, UBLPage, BCPage, XSLPage, TransductionPage,
+    65→  InversionPage, PredictiveLimitPage, InformationPage, PhaseSignalPage,
+    66→} from '../views/primitives';
+    67→import {
+    68→  BTCPPipelinePage, HashDNAExplorerPage, SevenPlanePage, MFFingerprintsPage,
+    69→  BTCPModulesPage, EscrowStateMachinePage, PrivateBIBLPage, ContinuumEnginesPage,
+    70→} from '../views/btcp_continuum';
+    71→import {
+    72→  BTCPSpecPage, ContinuumSpecPage, BotChainSpecPage,
+    73→} from '../views/spec_pages';
+    74→import {
+    75→  BEOLookupPage, LiveEventStreamPage, TimeSeriesPage,
+    76→  BTCPVisualizationPage, ContinuumVisualizationPage,
+    77→} from '../views/ui_assessment';
+    78→import { WalletBTCPPage, WalletContinuumPage } from '../views/wallet_pages';
+    79→import {
+    80→  HomePage, ZeroBridgePage, WitnessPage, BEODashboardPage,
+    81→  ActionEconomyPage, DigitalSelfPage,
+    82→} from '../views/core_principles';
+    83→import {
+    84→  ValidatorsPage, ValidatorHHIPage, AnnotatorsPage, BootstrapPage, ReputationPage,
+    85→  ZeroGFullStackPage, ZeroGStoragePage, ZeroGDAPage, ZeroGComputePage, ZeroGChainPage,
+    86→  ZeroGProofPage, ZeroGVMFamiliesPage,
+    87→  ChainsPage, TimescalePage, KVStorePage, BackfillPage, RelayersPage,
+    88→  DependencyGraphPage, SDKSpecPage, TokenPage, TokenDistributionPage, RevenuePage,
+    89→  AgentPage, AgentsPage, AgentValidatePage, InvestPage, IntelligenceMaintenancePage,
+    90→  ProtocolPage, ProtocolRolesPage, SelfVerificationPage,
+    91→  CEXPage, CEXFeedPage, CEXAlertsPage, CEXStatsPage,
+    92→  LeaderboardPage, FeedPage, AuditPatternsPage, DemoPage,
+    93→} from '../views/infrastructure';
+    94→
+    95→const PAGE_MAP: Record<string, React.ComponentType> = {
+    96→  // Core-principles pages (whitepaper-aligned)
+    97→  home: HomePage,
+    98→  zero_bridge: ZeroBridgePage,
+    99→  witness: WitnessPage,
+   100→  beo_dashboard: BEODashboardPage,
+   101→  action_economy: ActionEconomyPage,
+   102→  digital_self: DigitalSelfPage,
+   103→  // New redesigned dashboard is default
+   104→  dashboard: RedesignedDashboard,
+   105→  // Overview
+   106→  architecture: ArchitecturePage,
+   107→  vision: VisionPage,
+   108→  phases: PhasesPage,
+   109→  phase_transition: PhaseTransitionPage,
+   110→  order_parameter: OrderParameterPage,
+   111→  convergence: ConvergencePage,
+   112→  // Behavioral Engine
+   113→  bh: BHExplorerPage,
+   114→  bh_v2: BHv2ExtendedPage,
+   115→  bh_stats: BHStatsPage,
+   116→  akashic: AkashicPage,
+   117→  archetypes: ArchetypesPage,
+   118→  beo: BEOPage,
+   119→  faiss: FAISSPage,
+   120→  signals: SignalsPage,
+   121→  signal_types: SignalTypesPage,
+   122→  // Five-Plane Coherence
+   123→  plane_physical: PhysicalPlanePage,
+   124→  plane_mental: MentalPlanePage,
+   125→  plane_spiritual: SpiritualPlanePage,
+   126→  plane_conscious: ConsciousPlanePage,
+   127→  plane_anima: AnimaPlanePage,
+   128→  coherence_profiles: CoherenceProfilesPage,
+   129→  // Security
+   130→  security: SECPage,
+   131→  living_security: LivingSecurityPage,
+   132→  chameleon: ChameleonPage,
+   133→  crispr: CRISPRPage,
+   134→  pqc: PQCPage,
+   135→  manipulation: ManipulationPage,
+   136→  mev: MEVPage,
+   137→  immune: ImmunePage,
+   138→  attacks: AttacksPage,
+   139→  // Governance
+   140→  governance: GovernancePage,
+   141→  awa: AWAPage,
+   142→  gratitude: GratitudePage,
+   143→  love: LovePage,
+   144→  falsifiability: FalsifiabilityPage,
+   145→  slashing: SlashingPage,
+   146→  unknown_provision: UnknownProvisionPage,
+   147→  adaptive_consensus: AdaptiveConsensusPage,
+   148→  right_to_invisibility: RightToInvisibilityPage,
+   149→  elder_wisdom: ElderWisdomPage,
+   150→  dw_bft: DWBFTPage,
+   151→  // Akashic
+   152→  epigenetics: EpigeneticsPage,
+   153→  fork_resolution: ForkResolutionPage,
+   154→  resurrection: ResurrectionPage,
+   155→  trajectory: TrajectoryPage,
+   156→  dormancy: DormancyPage,
+   157→  genesis: GenesisPage,
+   158→  convergence_detail: ConvergenceDetailPage,
+   159→  manifestation_gap: ManifestationGapPage,
+   160→  negative_space: NegativeSpacePage,
+   161→  emergence: EmergencePage,
+   162→  // Markets
+   163→  btcp: BTCPPage,
+   164→  bibl: BIBLPage,
+   165→  bitp: BITPPage,
+   166→  sba: SBAPage,
+   167→  continuum: ContinuumPage,
+   168→  price: PricePage,
+   169→  inverted_price: InvertedPricePage,
+   170→  liquidity: LiquidityPage,
+   171→  stablecoin_health: StablecoinHealthPage,
+   172→  price_hierarchy: PriceHierarchyPage,
+   173→  // Novel Primitives
+   174→  birp: BIRPPage,
+   175→  birp_dna_code: DNACodePage,
+   176→  ubl: UBLPage,
+   177→  bc: BCPage,
+   178→  xsl: XSLPage,
+   179→  transduction: TransductionPage,
+   180→  inversion: InversionPage,
+   181→  predictive_limit: PredictiveLimitPage,
+   182→  information: InformationPage,
+   183→  phase_signal: PhaseSignalPage,
+   184→  // BTCP + CONTINUUM
+   185→  btcp_pipeline: BTCPPipelinePage,
+   186→  wallet_btcp: WalletBTCPPage,
+   187→  wallet_continuum: WalletContinuumPage,
+   188→  beo_lookup: BEOLookupPage,
+   189→  live_events: LiveEventStreamPage,
+   190→  time_series: TimeSeriesPage,
+   191→  btcp_viz: BTCPVisualizationPage,
+   192→  continuum_viz: ContinuumVisualizationPage,
+   193→  btcp_spec: BTCPSpecPage,
+   194→  continuum_spec: ContinuumSpecPage,
+   195→  botchain_spec: BotChainSpecPage,
+   196→  hash_dna: HashDNAExplorerPage,
+   197→  seven_plane: SevenPlanePage,
+   198→  mf_fingerprints: MFFingerprintsPage,
+   199→  btcp_modules: BTCPModulesPage,
+   200→  escrow_state: EscrowStateMachinePage,
+   201→  private_bibl: PrivateBIBLPage,
+   202→  continuum_engines: ContinuumEnginesPage,
+   203→  // Validators & Consensus
+   204→  validators: ValidatorsPage,
+   205→  validator_hhi: ValidatorHHIPage,
+   206→  annotators: AnnotatorsPage,
+   207→  bootstrap: BootstrapPage,
+   208→  reputation: ReputationPage,
+   209→  // 0G Integration
+   210→  zg_full: ZeroGFullStackPage,
+   211→  zg_storage: ZeroGStoragePage,
+   212→  zg_da: ZeroGDAPage,
+   213→  zg_compute: ZeroGComputePage,
+   214→  zg_chain: ZeroGChainPage,
+   215→  zg_proof: ZeroGProofPage,
+   216→  zg_vm_families: ZeroGVMFamiliesPage,
+   217→  // Infrastructure
+   218→  chains: ChainsPage,
+   219→  timescale: TimescalePage,
+   220→  kv: KVStorePage,
+   221→  backfill: BackfillPage,
+   222→  relayers: RelayersPage,
+   223→  dependency_graph: DependencyGraphPage,
+   224→  sdk_spec: SDKSpecPage,
+   225→  token: TokenPage,
+   226→  token_distribution: TokenDistributionPage,
+   227→  revenue: RevenuePage,
+   228→  // AI Agent
+   229→  agent: AgentPage,
+   230→  agents: AgentsPage,
+   231→  agent_validate: AgentValidatePage,
+   232→  invest: InvestPage,
+   233→  intelligence_maintenance: IntelligenceMaintenancePage,
+   234→  // Protocol Health
+   235→  protocol: ProtocolPage,
+   236→  protocol_roles: ProtocolRolesPage,
+   237→  self: SelfVerificationPage,
+   238→  // CEX
+   239→  cex: CEXPage,
+   240→  cex_feed: CEXFeedPage,
+   241→  cex_alerts: CEXAlertsPage,
+   242→  cex_stats: CEXStatsPage,
+   243→  // Explorers
+   244→  leaderboard: LeaderboardPage,
+   245→  feed: FeedPage,
+   246→  audit_patterns: AuditPatternsPage,
+   247→  demo: DemoPage,
+   248→};
+   249→
+   250→const PAGE_TITLES: Record<string, string> = {
+   251→  home: 'Home',
+   252→  zero_bridge: 'Zero-Bridge Exchange',
+   253→  witness: 'Witness',
+   254→  beo_dashboard: 'BEO Dashboard',
+   255→  action_economy: 'Action Economy',
+   256→  digital_self: 'Digital Self',
+   257→  dashboard: 'Dashboard',
+   258→  architecture: 'Architecture Flow',
+   259→  vision: 'Protocol Vision',
+   260→  phases: 'Protocol Phases',
+   261→  phase_transition: 'Phase Transition',
+   262→  order_parameter: 'Order Parameter',
+   263→  convergence: 'Convergence',
+   264→  bh: 'Behavioral Hash Explorer',
+   265→  bh_v2: 'BH v2 Extended Payload',
+   266→  bh_stats: 'BH Statistics',
+   267→  akashic: 'Akashic Index',
+   268→  archetypes: 'Behavioral Archetypes',
+   269→  beo: 'BEO Resolution',
+   270→  faiss: 'FAISS Vector Index',
+   271→  signals: 'Signals',
+   272→  signal_types: 'Signal Type Catalog',
+   273→  plane_physical: 'Physical Plane Phi',
+   274→  plane_mental: 'Mental Plane M',
+   275→  plane_spiritual: 'Spiritual Plane Sigma',
+   276→  plane_conscious: 'Conscious Plane K',
+   277→  plane_anima: 'ANIMA Plane A',
+   278→  coherence_profiles: 'Coherence Weight Profiles',
+   279→  security: 'SEC Composite',
+   280→  living_security: 'Living Security Stack',
+   281→  chameleon: 'Chameleon Protocol',
+   282→  crispr: 'CRISPR Defense',
+   283→  pqc: 'Post-Quantum Crypto',
+   284→  manipulation: 'Manipulation Fingerprint Detector',
+   285→  mev: 'MEV Detection',
+   286→  immune: 'Immune Memory',
+   287→  attacks: 'Attack Simulator',
+   288→  governance: 'Governance Overview',
+   289→  awa: 'AWA Ceremony',
+   290→  gratitude: 'Gratitude Protocol',
+   291→  love: 'Love F-coefficient',
+   292→  falsifiability: 'Falsifiability x15',
+   293→  slashing: 'Slashing Conditions',
+   294→  unknown_provision: 'Unknown-Unknown Provision',
+   295→  adaptive_consensus: 'Adaptive Consensus',
+   296→  right_to_invisibility: 'Right to Invisibility',
+   297→  elder_wisdom: 'Elder Wisdom',
+   298→  dw_bft: 'Diversity-Weighted BFT',
+   299→  epigenetics: 'Epigenetics',
+   300→  fork_resolution: 'Fork Resolution',
+   301→  resurrection: 'Resurrection Inference',
+   302→  trajectory: 'Trajectory Anomaly',
+   303→  dormancy: 'Dormancy Classification',
+   304→  genesis: 'Genesis Inference',
+   305→  convergence_detail: 'Convergence Detail',
+   306→  manifestation_gap: 'Manifestation Gap',
+   307→  negative_space: 'Negative Space',
+   308→  emergence: 'Emergence Detection',
+   309→  btcp: 'BTCP Routing',
+   310→  bibl: 'BIBL Patterns',
+   311→  bitp: 'BITP Exchange',
+   312→  sba: 'SBA Sovereign',
+   313→  continuum: 'Continuum DEX',
+   314→  price: 'Price Feeds',
+   315→  inverted_price: 'Inverted Price',
+   316→  liquidity: 'Liquidity',
+   317→  stablecoin_health: 'Stablecoin Health',
+   318→  price_hierarchy: 'Price Hierarchy',
+   319→  birp: 'BIRP Recovery',
+   320→  birp_dna_code: 'DNA_Code Rotation',
+   321→  ubl: 'UBL Schema',
+   322→  bc: 'Behavioral Coherence',
+   323→  xsl: 'XSL Ecological',
+   324→  transduction: 'Transduction',
+   325→  inversion: 'Inversion',
+   326→  predictive_limit: 'Predictive Limit',
+   327→  information: 'Information Conservation',
+   328→  phase_signal: 'Phase Signal',
+   329→  btcp_pipeline: 'BTCP Pipeline Status',
+   330→  wallet_btcp: 'BTCP + Wallet',
+   331→  wallet_continuum: 'Continuum + Wallet',
+   332→  beo_lookup: 'BEO Lookup Toolbox',
+   333→  live_events: 'Live Event Stream',
+   334→  time_series: 'Time-Series Charts',
+   335→  btcp_viz: 'BTCP Visualization',
+   336→  continuum_viz: 'Continuum Visualization',
+   337→  btcp_spec: 'BTCP Protocol',
+   338→  continuum_spec: 'Continuum Network',
+   339→  botchain_spec: 'BOT Chain Integration',
+   340→  hash_dna: 'Hash_DNA Explorer',
+   341→  seven_plane: '7-Plane Coherence',
+   342→  mf_fingerprints: '7 MF Fingerprints',
+   343→  btcp_modules: 'BTCP Modules',
+   344→  escrow_state: 'Escrow State Machine',
+   345→  private_bibl: 'Private BIBL',
+   346→  continuum_engines: 'CONTINUUM Engines',
+   347→  validators: 'Validator Registry',
+   348→  validator_hhi: 'HHI Distribution',
+   349→  annotators: 'K Annotators',
+   350→  bootstrap: 'Bootstrap Status',
+   351→  reputation: 'Reputation',
+   352→  zg_full: '0G Full Stack',
+   353→  zg_storage: '0G Storage',
+   354→  zg_da: '0G DA Layer',
+   355→  zg_compute: '0G Compute',
+   356→  zg_chain: '0G Chain Status',
+   357→  zg_proof: '0G Proof',
+   358→  zg_vm_families: 'VM Families',
+   359→  chains: 'Chain Coverage',
+   360→  timescale: 'TimescaleDB',
+   361→  kv: 'KV Store',
+   362→  backfill: 'Backfill Status',
+   363→  relayers: 'Relayers',
+   364→  dependency_graph: 'Dependency Graph',
+   365→  sdk_spec: 'SDK Spec',
+   366→  token: 'Token Utility',
+   367→  token_distribution: 'Token Distribution',
+   368→  revenue: 'Revenue Model',
+   369→  agent: 'AI Agent ID',
+   370→  agents: 'All Agents',
+   371→  agent_validate: 'Validate',
+   372→  invest: 'Investment Scan',
+   373→  intelligence_maintenance: 'Intelligence Maintenance',
+   374→  protocol: 'Protocol Monitor',
+   375→  protocol_roles: 'Protocol Roles',
+   376→  self: 'Self Verification',
+   377→  cex: 'CEX Status',
+   378→  cex_feed: 'CEX Feed',
+   379→  cex_alerts: 'CEX Alerts',
+   380→  cex_stats: 'CEX Stats',
+   381→  leaderboard: 'Leaderboard',
+   382→  feed: 'Signal Feed',
+   383→  audit_patterns: 'Audit Patterns',
+   384→  demo: 'Demo Attacks',
+   385→};
+   386→
+   387→export const dynamic = 'force-dynamic';
+   388→
+   389→export default function HomeWithSuspense() {
+   390→  return (
+   391→    <Suspense fallback={<div className="flex h-screen items-center justify-center text-muted-foreground">Loading TRION Protocol...</div>}>
+   392→      <Home />
+   393→    </Suspense>
+   394→  );
+   395→}
+   396→
+   397→function Home() {
+   398→  const searchParams = useSearchParams();
+   399→  const router = useRouter();
+   400→  const initialPage = searchParams.get('page') || 'dashboard';
+   401→  const [activePage, setActivePage] = useState(
+   402→    PAGE_MAP[initialPage] ? initialPage : 'dashboard'
+   403→  );
+   404→  const [sidebarOpen, setSidebarOpen] = useState(false);
+   405→  const [settingsOpen, setSettingsOpen] = useState(false);
+   406→  const [theme, toggleTheme] = useTheme();
+   407→
+   408→  const changePage = useCallback((p: string) => {
+   409→    setActivePage(p);
+   410→    const url = new URL(window.location.href);
+   411→    url.searchParams.set('page', p);
+   412→    router.push(`${url.pathname}?${url.searchParams.toString()}`, { scroll: false });
+   413→  }, [router]);
+   414→
+   415→  useEffect(() => {
+   416→    const p = searchParams.get('page');
+   417→    if (p && PAGE_MAP[p] && p !== activePage) {
+   418→      setActivePage(p);
+   419→    }
+   420→  }, [searchParams, activePage]);
+   421→
+   422→  // Keyboard shortcuts
+   423→  useEffect(() => {
+   424→    const onKey = (e: KeyboardEvent) => {
+   425→      const t = e.target as HTMLElement;
+   426→      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+   427→      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+   428→        e.preventDefault();
+   429→        alert(
+   430→          'TRION Keyboard Shortcuts\n\n' +
+   431→          '⌘K / Ctrl+K    Command palette\n' +
+   432→          '⌘B / Ctrl+B    Toggle sidebar\n' +
+   433→          '?                This help\n' +
+   434→          'Esc             Close overlays\n'
+   435→        );
+   436→      }
+   437→      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+   438→        e.preventDefault();
+   439→        setSidebarOpen(v => !v);
+   440→      }
+   441→    };
+   442→    window.addEventListener('keydown', onKey);
+   443→    return () => window.removeEventListener('keydown', onKey);
+   444→  }, []);
+   445→
+   446→  const PageComponent = PAGE_MAP[activePage] || RedesignedDashboard;
+   447→  const pageTitle = PAGE_TITLES[activePage] || 'Dashboard';
+   448→
+   449→  const palettePages = useMemo(
+   450→    () => NAV.flatMap(g => g.items.map(item => ({
+   451→      id: item.id,
+   452→      label: item.label,
+   453→      group: g.label,
+   454→    }))),
+   455→    [],
+   456→  );
+   457→
+   458→  return (
+   459→    <div className="flex h-screen overflow-hidden bg-background">
+   460→      <CommandPalette pages={palettePages} onSelect={changePage} />
+   461→      <Sidebar
+   462→        activePage={activePage}
+   463→        onPageChange={changePage}
+   464→        isOpen={sidebarOpen}
+   465→        onClose={() => setSidebarOpen(false)}
+   466→      />
+   467→      <div className="flex-1 flex flex-col overflow-hidden">
+   468→        {/* Top bar */}
+   469→        <header className="flex items-center justify-between px-4 md:px-6 h-16 border-b border-border bg-card flex-shrink-0 gap-2">
+   470→          <div className="flex items-center gap-3 min-w-0 flex-1">
+   471→            <button
+   472→              onClick={() => setSidebarOpen(true)}
+   473→              className="lg:hidden p-2 rounded-lg hover:bg-accent flex-shrink-0"
+   474→              aria-label="Open sidebar"
+   475→            >
+   476→              <Icons.Menu className="w-5 h-5" />
+   477→            </button>
+   478→            <div className="min-w-0">
+   479→              <h1 className="text-lg font-bold truncate">{pageTitle}</h1>
+   480→              <p className="text-xs text-muted-foreground hidden sm:block truncate">
+   481→                TRION Protocol — Behavioral Truth Oracle
+   482→              </p>
+   483→            </div>
+   484→          </div>
+   485→          <div className="flex items-center gap-2">
+   486→            <LiveClock />
+   487→            <button
+   488→              onClick={toggleTheme}
+   489→              className="p-2 rounded-lg hover:bg-accent"
+   490→              aria-label="Toggle theme"
+   491→            >
+   492→              {theme === 'dark' ? <Icons.Sun className="w-4 h-4" /> : <Icons.Moon className="w-4 h-4" />}
+   493→            </button>
+   494→            <button
+   495→              onClick={() => setSettingsOpen(true)}
+   496→              className="p-2 rounded-lg hover:bg-accent"
+   497→              aria-label="Settings"
+   498→            >
+   499→              <Icons.Settings className="w-4 h-4" />
+   500→            </button>
+   501→            <WalletButton />
+   502→          </div>
+   503→        </header>
+   504→
+   505→        {/* Main content */}
+   506→        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+   507→          <PageComponent />
+   508→        </main>
+   509→      </div>
+   510→      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+   511→    </div>
+   512→  );
+   513→}
+   514→
+   515→// ═══════════════════════════════════════════════════════════════════════
+   516→// REDESIGNED DASHBOARD — Aligned with TRION Whitepaper
+   517→// ═══════════════════════════════════════════════════════════════════════
+   518→function RedesignedDashboard() {
+   519→  const { data: health } = useAPI('/api/v1/health', 3000);
+   520→  const { data: faiss } = useAPI('/api/v1/faiss', 5000);
+   521→  const { data: streamer } = useAPI('/api/v1/btcp/streamer/status', 2000);
+   522→  const { data: bhStats } = useAPI('/api/v1/bh/stats', 3000);
+   523→  const { items: feedItems } = useStream('/api/v1/feed', 4000);
+   524→
+   525→  const bhTotal = streamer?.total_bhs || Object.values(bhStats?.per_chain || {}).reduce((a: number, b: any) => a + Number(b), 0) || 0;
+   526→  const vectorCount = useCounter(Math.max(faiss?.indexed_vectors || 0, faiss?.ntotal || 0));
+   527→  const totalBH = useCounter(bhTotal);
+   528→  const isLive = health?.status === 'healthy';
+   529→  const streamerLive = streamer?.status === 'RUNNING';
+   530→
+   531→  return (
+   532→    <div className="space-y-6 max-w-[1600px] mx-auto">
+   533→      {/* HERO — Mission Statement */}
+   534→      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-blue-900/30 via-purple-900/20 to-transparent p-8">
+   535→        <div className="absolute inset-0 grid-pattern opacity-20" />
+   536→        <div className="relative z-10">
+   537→          <div className="flex items-center gap-2 mb-3">
+   538→            <div className="flex items-center gap-2">
+   539→              <span className={`relative flex h-2.5 w-2.5`}>
+   540→                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? 'bg-green-400' : 'bg-amber-400'}`}></span>
+   541→                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isLive ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+   542→              </span>
+   543→              <span className={`text-xs font-semibold uppercase tracking-wider ${isLive ? 'text-green-400' : 'text-amber-400'}`}>
+   544→                {isLive ? 'Network Live' : 'Bootstrap Phase'}
+   545→              </span>
+   546→            </div>
+   547→          </div>
+   548→          <h1 className="text-3xl md:text-4xl font-bold mb-3">
+   549→            The Behavioral Truth Oracle
+   550→          </h1>
+   551→          <p className="text-muted-foreground max-w-2xl mb-6">
+   552→            Multi-chain behavioral truth infrastructure computing cryptographic coherence scores 
+   553→            across 5 behavioral planes. From on-chain patterns to verifiable signals — 
+   554→            TRION transforms raw transaction data into behavioral truth.
+   555→          </p>
+   556→          
+   557→          {/* Key metrics */}
+   558→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   559→            <MetricCard
+   560→              icon={<Icons.Database className="w-5 h-5" />}
+   561→              label="Behavioral Hashes"
+   562→              value={fmt(totalBH, 0)}
+   563→              sub={streamerLive ? `${streamer?.bhs_per_second?.toFixed(0) || 0}/sec live` : 'indexed'}
+   564→              color="blue"
+   565→            />
+   566→            <MetricCard
+   567→              icon={<Icons.Cpu className="w-5 h-5" />}
+   568→              label="FAISS Vectors"
+   569→              value={fmt(vectorCount, 0)}
+   570→              sub="128-dimensional BEO"
+   571→              color="purple"
+   572→            />
+   573→            <MetricCard
+   574→              icon={<Icons.Globe className="w-5 h-5" />}
+   575→              label="Chains Streaming"
+   576→              value={fmt(streamer?.chains_active || 0)}
+   577→              sub="real-time RPC"
+   578→              color="green"
+   579→            />
+   580→            <MetricCard
+   581→              icon={<Icons.Gauge className="w-5 h-5" />}
+   582→              label="Coherence C(t)"
+   583→              value={(health?.coherence_score || health?.dynamic_threshold || 0).toFixed(4)}
+   584→              sub={`Θ = ${(health?.dynamic_threshold || 0.661).toFixed(3)}`}
+   585→              color="amber"
+   586→            />
+   587→          </div>
+   588→        </div>
+   589→      </div>
+   590→
+   591→      {/* PIPELINE FLOW */}
+   592→      <PipelineFlow />
+   593→
+   594→      {/* COHERENCE ENGINE + MASTER EQUATION */}
+   595→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   596→        <CoherenceEngine />
+   597→        <MasterEquation />
+   598→      </div>
+   599→
+   600→      {/* MOAT FACTORS + ON-CHAIN PUBLICATION */}
+   601→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   602→        <MoatFactors />
+   603→        <SignalPublication />
+   604→      </div>
+   605→
+   606→      {/* LIVE DATA + WHITEPAPER FORMULAS */}
+   607→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   608→        {/* Signal Feed */}
+   609→        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6">
+   610→          <div className="flex items-center justify-between mb-4">
+   611→            <div>
+   612→              <h3 className="text-lg font-bold">Live Signal Feed</h3>
+   613→              <p className="text-xs text-muted-foreground">Recent behavioral truth assessments</p>
+   614→            </div>
+   615→            <Icons.Radio className="w-5 h-5 text-muted-foreground" />
+   616→          </div>
+   617→          <div className="space-y-2 max-h-80 overflow-y-auto">
+   618→            {feedItems.length === 0 ? (
+   619→              <div className="text-center py-12 text-muted-foreground text-sm">
+   620→                <Icons.Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+   621→                Connecting to live data stream...
+   622→              </div>
+   623→            ) : (
+   624→              feedItems.slice(0, 15).map((s: any, i: number) => (
+   625→                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+   626→                  <div className="flex items-center gap-3 min-w-0">
+   627→                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.coherent ? 'bg-green-500' : 'bg-amber-500'}`} />
+   628→                    <div className="min-w-0">
+   629→                      <div className="font-medium text-sm truncate">
+   630→                        {s.protocol_name || s.short_id || hex(s.entity_id, 16)}
+   631→                      </div>
+   632→                      <div className="text-xs text-muted-foreground">
+   633→                        {tfmt(s.timestamp)} · {s.archetype || s.limiting_plane || 'analyzing'}
+   634→                      </div>
+   635→                    </div>
+   636→                  </div>
+   637→                  <div className="text-right flex-shrink-0">
+   638→                    <div className={`font-mono text-sm font-bold ${s.coherent ? 'text-green-400' : 'text-amber-400'}`}>
+   639→                      {pct(s.coherence_score, 2)}
+   640→                    </div>
+   641→                    <div className="text-xs text-muted-foreground">
+   642→                      {s.signal_type || (s.coherent ? 'SIGNAL' : 'SILENCE')}
+   643→                    </div>
+   644→                  </div>
+   645→                </div>
+   646→              ))
+   647→            )}
+   648→          </div>
+   649→        </div>
+   650→
+   651→        {/* Whitepaper Reference */}
+   652→        <div className="bg-card border border-border rounded-xl p-6">
+   653→          <div className="flex items-center gap-2 mb-4">
+   654→            <Icons.BookOpen className="w-5 h-5 text-muted-foreground" />
+   655→            <h3 className="text-lg font-bold">Whitepaper Core</h3>
+   656→          </div>
+   657→          <div className="space-y-4 text-sm">
+   658→            <FormulaBlock
+   659→              layer="L5.2"
+   660→              name="Coherence"
+   661→              formula="C(t) = α·Φ + β·M + γ·Σ + δ·K + ε·A"
+   662→              desc="Five-plane weighted fusion"
+   663→            />
+   664→            <FormulaBlock
+   665→              layer="L5.3"
+   666→              name="Master Equation"
+   667→              formula="T(t) = [C≥Θ]·C·e^(M_moat)"
+   668→              desc="Truth with moat amplification"
+   669→            />
+   670→            <FormulaBlock
+   671→              layer="L0.5"
+   672→              name="Economic Moat"
+   673→              formula="M_moat = D·Q·R·X·F·N"
+   674→              desc="Six-factor multiplicative defense"
+   675→            />
+   676→            <FormulaBlock
+   677→              layer="L1.1"
+   678→              name="Physical Plane"
+   679→              formula="Φ(t) = Σ(wᵢ·fᵢ) for i=1..9"
+   680→              desc="Shannon entropy features"
+   681→            />
+   682→            <FormulaBlock
+   683→              layer="L4.1"
+   684→              name="Spiritual Plane"
+   685→              formula="Σ(t) = Σ(sⱼ·dⱼ·inlier) / Σ(sⱼ·dⱼ)"
+   686→              desc="Diversity-weighted BFT"
+   687→            />
+   688→          </div>
+   689→        </div>
+   690→      </div>
+   691→
+   692→      {/* Footer */}
+   693→      <div className="text-center text-xs text-muted-foreground py-6 border-t border-border">
+   694→        TRION Protocol · Behavioral Truth Infrastructure · 128 chains · 18 VM families
+   695→      </div>
+   696→    </div>
+   697→  );
+   698→}
+   699→
+   700→function MetricCard({ icon, label, value, sub, color }: {
+   701→  icon: React.ReactNode;
+   702→  label: string;
+   703→  value: string;
+   704→  sub?: string;
+   705→  color: 'blue' | 'purple' | 'green' | 'amber';
+   706→}) {
+   707→  const colors = {
+   708→    blue: 'from-blue-500/20 to-blue-500/5 text-blue-400 border-blue-500/20',
+   709→    purple: 'from-purple-500/20 to-purple-500/5 text-purple-400 border-purple-500/20',
+   710→    green: 'from-green-500/20 to-green-500/5 text-green-400 border-green-500/20',
+   711→    amber: 'from-amber-500/20 to-amber-500/5 text-amber-400 border-amber-500/20',
+   712→  };
+   713→  return (
+   714→    <div className={`bg-gradient-to-br ${colors[color]} border rounded-xl p-4`}>
+   715→      <div className="flex items-center gap-2 mb-2 opacity-80">
+   716→        {icon}
+   717→        <span className="text-xs font-medium uppercase tracking-wider">{label}</span>
+   718→      </div>
+   719→      <div className="font-mono text-2xl font-bold">{value}</div>
+   720→      {sub && <div className="text-xs opacity-70 mt-1">{sub}</div>}
+   721→    </div>
+   722→  );
+   723→}
+   724→
+   725→function FormulaBlock({ layer, name, formula, desc }: {
+   726→  layer: string;
+   727→  name: string;
+   728→  formula: string;
+   729→  desc: string;
+   730→}) {
+   731→  return (
+   732→    <div className="p-3 rounded-lg bg-muted/20 border border-border">
+   733→      <div className="flex items-center gap-2 mb-1">
+   734→        <span className="text-[10px] font-mono bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">{layer}</span>
+   735→        <span className="font-semibold text-sm">{name}</span>
+   736→      </div>
+   737→      <div className="font-mono text-sm text-blue-400 mb-1">{formula}</div>
+   738→      <div className="text-xs text-muted-foreground">{desc}</div>
+   739→    </div>
+   740→  );
+   741→}
+   742→
