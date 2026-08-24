@@ -14,8 +14,10 @@ import {
 } from './primitives'
 import { EntityDetail } from './entity-detail'
 import { BrtClock } from './brt-clock'
+import { BtcpQuickFlow } from './btcp-quick-flow'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Download, FileJson } from 'lucide-react'
 
 export function OverviewView({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [detailBeo, setDetailBeo] = useState<string | null>(null)
@@ -45,6 +47,30 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
   const hist = history.data
   const silenceEvents = hist?.signals.filter(s => s.status === 'SILENCE').slice(-6).reverse() ?? []
   const coherenceSeries = hist?.signals.map(s => s.coherence) ?? []
+
+  const exportHistory = (format: 'csv' | 'json') => {
+    if (!hist) return
+    let blob: Blob
+    let filename: string
+    if (format === 'csv') {
+      const header = 'timestamp,entity,type,status,coherence,threshold,margin,tValue,limitingPlane,volatility,emitted'
+      const rows = hist.signals.map(s =>
+        [s.createdAt, JSON.stringify(s.entity), s.type, s.status, s.coherence.toFixed(6),
+         s.threshold.toFixed(6), s.margin.toFixed(6), s.tValue.toFixed(6),
+         s.limitingPlane ?? '', s.volatility.toFixed(4), s.emitted].join(','))
+      blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+      filename = `trion-signal-history-${Date.now()}.csv`
+    } else {
+      blob = new Blob([JSON.stringify(hist, null, 2)], { type: 'application/json' })
+      filename = `trion-signal-history-${Date.now()}.json`
+    }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-8">
@@ -105,7 +131,21 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
       {hist && hist.total > 0 && (
         <section className="grid gap-4 lg:grid-cols-5">
           <Panel title="Coherence History (live ledger)" className="lg:col-span-3"
-            action={<LiveBadge>{hist.total} signals</LiveBadge>}>
+            action={
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => exportHistory('csv')}
+                  className="h-7 gap-1 px-2 text-[11px] text-zinc-500 hover:text-emerald-400"
+                  title="Export as CSV">
+                  <Download className="h-3 w-3" /> CSV
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => exportHistory('json')}
+                  className="h-7 gap-1 px-2 text-[11px] text-zinc-500 hover:text-emerald-400"
+                  title="Export as JSON">
+                  <FileJson className="h-3 w-3" /> JSON
+                </Button>
+                <LiveBadge>{hist.total} signals</LiveBadge>
+              </div>
+            }>
             <div className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between">
                 <span className="text-[11px] uppercase tracking-wider text-zinc-500">C(t) over last {hist.signals.length} publications</span>
@@ -236,6 +276,13 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
             </Button>
           </div>
         </Panel>
+      </section>
+
+      {/* ── E2E BTCP quick flow ──────────────────────────────────────────── */}
+      <section>
+        <SectionHeader eyebrow="BTCP — Live Demonstration" title="One-Click Zero-Bridge Flow"
+          description="Register a real intent, watch the router score candidate chains, lock escrow natively, then release through the coherence gate — the full six-step lifecycle with zero bridged assets." />
+        <BtcpQuickFlow />
       </section>
 
       {/* ── BRT phase clock ─────────────────────────────────────────────── */}

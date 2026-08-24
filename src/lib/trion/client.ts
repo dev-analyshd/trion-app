@@ -183,3 +183,19 @@ export const statusColor = (s: string): string => {
     default: return 'text-zinc-300'
   }
 }
+
+export interface NlResponse {
+  formula: string
+  factorDefinitions: { key: string; name: string; formula: string }[]
+  alertThreshold: number
+  total: number; routable: number; alertCount: number
+  chains: {
+    chainId: number; name: string; vm: string; nativeToken: string
+    finalitySec: number; avgGasUsd: number
+    nl: number; alert: boolean; action: string
+    factors: { key: string; name: string; value: number; formula: string }[]
+    ld: number; lo: number; lc: number; ls: number
+  }[]
+  worstChains: { name: string; nl: number }[]
+  bestChains: { name: string; nl: number }[]
+}

@@ -68,11 +68,30 @@ function nextWindow(phase: number, periodSec: number): { inMin: number; label: s
 }
 
 export function BrtClock() {
-  const [now, setNow] = useState(Math.floor(Date.now() / 1000))
+  // Start at 0 to avoid SSR/client hydration mismatch (Date.now differs),
+  // then begin ticking after mount.
+  const [now, setNow] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
-    return () => clearInterval(id)
+    const t = setTimeout(() => setNow(Math.floor(Date.now() / 1000)), 0)
+    return () => { clearInterval(id); clearTimeout(t) }
   }, [])
+
+  // Pre-mount placeholder matching server render
+  if (now === 0) {
+    return (
+      <Panel title="Biological Rhythm Timer (L6.2)"
+        action={<LiveBadge>live phases</LiveBadge>}>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex h-[116px] items-center justify-center text-[11px] text-zinc-700">
+              synchronizing…
+            </div>
+          ))}
+        </div>
+      </Panel>
+    )
+  }
 
   const phases = brtPhases(now)
   const ultra = nextWindow(phases.ultradian, 5400)

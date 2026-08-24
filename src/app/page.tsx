@@ -2,7 +2,7 @@
 
 // TRION Protocol — the institutional frontend shell.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OverviewView } from '@/components/trion/overview'
 import { CoherenceView } from '@/components/trion/coherence-view'
@@ -12,6 +12,8 @@ import { ValidatorsView } from '@/components/trion/validators-view'
 import { AnimaView } from '@/components/trion/anima-view'
 import { SecurityView } from '@/components/trion/security-view'
 import { ArchitectureView } from '@/components/trion/architecture-view'
+import { NlExplorerView } from '@/components/trion/nl-explorer'
+import { KeyboardHelp } from '@/components/trion/keyboard-help'
 import { cn } from '@/lib/utils'
 import { Menu, X } from 'lucide-react'
 
@@ -20,14 +22,15 @@ const queryClient = new QueryClient({
 })
 
 const NAV = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'coherence', label: 'Coherence Engine' },
-  { id: 'bh', label: 'Behavioral Hash' },
-  { id: 'btcp', label: 'BTCP Zero-Bridge' },
-  { id: 'validators', label: 'Validators' },
-  { id: 'anima', label: 'ANIMA Intelligence' },
-  { id: 'security', label: 'Security' },
-  { id: 'architecture', label: 'Architecture' },
+  { id: 'overview', label: 'Overview', key: '1' },
+  { id: 'coherence', label: 'Coherence Engine', key: '2' },
+  { id: 'bh', label: 'Behavioral Hash', key: '3' },
+  { id: 'btcp', label: 'BTCP Zero-Bridge', key: '4' },
+  { id: 'nl', label: 'NL Explorer', key: '5' },
+  { id: 'validators', label: 'Validators', key: '6' },
+  { id: 'anima', label: 'ANIMA Intelligence', key: '7' },
+  { id: 'security', label: 'Security', key: '8' },
+  { id: 'architecture', label: 'Architecture', key: '9' },
 ]
 
 function Logo() {
@@ -56,18 +59,44 @@ function LiveClock() {
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [])
-  return <span className="tabular font-mono text-xs text-zinc-500">{time}</span>
+  return (
+    <span className="tabular hidden font-mono text-xs text-zinc-500 sm:inline" suppressHydrationWarning>
+      {time || '--:--:--'}
+    </span>
+  )
 }
 
 export default function Home() {
   const [view, setView] = useState('overview')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
-  const navigate = (v: string) => {
+  const navigate = useCallback((v: string) => {
     setView(v)
     setMenuOpen(false)
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  }, [])
+
+  // Keyboard shortcuts: 1-9 switch views, ? opens help, Esc closes menus
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      // Don't hijack typing in inputs/selects/textareas
+      if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      if (e.key >= '1' && e.key <= '9') {
+        const item = NAV.find(n => n.key === e.key)
+        if (item) navigate(item.id)
+      } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault()
+        setHelpOpen(o => !o)
+      } else if (e.key === 'Escape') {
+        setHelpOpen(false)
+        setMenuOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -83,7 +112,7 @@ export default function Home() {
                     key={item.id}
                     onClick={() => navigate(item.id)}
                     className={cn(
-                      'rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                      'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
                       view === item.id
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : 'text-zinc-400 hover:text-zinc-200'
@@ -91,12 +120,22 @@ export default function Home() {
                     aria-current={view === item.id ? 'page' : undefined}
                   >
                     {item.label}
+                    <kbd className={cn('hidden rounded border px-1 font-mono text-[9px] leading-4 xl:inline',
+                      view === item.id ? 'border-emerald-500/30 text-emerald-500/70' : 'border-zinc-700 text-zinc-600')}>
+                      {item.key}
+                    </kbd>
                   </button>
                 ))}
               </nav>
             </div>
             <div className="flex items-center gap-4">
               <LiveClock />
+              <button
+                onClick={() => setHelpOpen(true)}
+                aria-label="Keyboard shortcuts"
+                className="hidden rounded-md p-2 text-zinc-500 transition-colors hover:text-emerald-400 sm:block">
+                <kbd className="rounded border border-zinc-700 px-1.5 py-0.5 font-mono text-[10px]">?</kbd>
+              </button>
               <button
                 className="rounded-md p-2 text-zinc-400 hover:text-zinc-200 lg:hidden"
                 onClick={() => setMenuOpen(o => !o)}
@@ -116,12 +155,13 @@ export default function Home() {
                     key={item.id}
                     onClick={() => navigate(item.id)}
                     className={cn(
-                      'rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                      'flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
                       view === item.id
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : 'text-zinc-400 hover:text-zinc-200'
                     )}
                   >
+                    <kbd className="rounded border border-zinc-700 px-1 font-mono text-[9px] text-zinc-600">{item.key}</kbd>
                     {item.label}
                   </button>
                 ))}
@@ -136,11 +176,15 @@ export default function Home() {
           {view === 'coherence' && <CoherenceView />}
           {view === 'bh' && <BhExplorerView />}
           {view === 'btcp' && <BtcpView />}
+          {view === 'nl' && <NlExplorerView />}
           {view === 'validators' && <ValidatorsView />}
           {view === 'anima' && <AnimaView />}
           {view === 'security' && <SecurityView />}
           {view === 'architecture' && <ArchitectureView />}
         </main>
+
+        {/* Keyboard help overlay */}
+        <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
 
         {/* Footer — sticky bottom */}
         <footer className="mt-auto border-t border-zinc-800 bg-zinc-950">
