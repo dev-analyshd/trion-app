@@ -241,3 +241,27 @@ export interface BtcpIntentsResponse {
     }[]
   }[]
 }
+
+export interface EntityDetailResponse {
+  beoId: string
+  label: string
+  kind: string
+  archetype: string
+  depth: number
+  coherence: number
+  trustTier: string
+  eventMix: { type: string; count: number; pct: number }[]
+  chainSpan: { chainId: number; name: string; vm: string; count: number; pct: number }[]
+  magnitudeBuckets: number[]
+  activitySeries: number[]
+  stats: {
+    totalHashes: number
+    chainsSpanned: number
+    signals: number
+    emitted: number
+    silenced: number
+    silenceRate: number
+    firstSeen: string
+    lastHashAt: string | null
+  }
+}

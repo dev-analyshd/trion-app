@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   fetchJSON, fmtInt, truncateHex, type SignalResponse, type SignalHistoryResponse, type EntitySummary,
+  type EntityDetailResponse,
 } from '@/lib/trion/client'
 import { Panel, MeterBar, Sparkline, LiveBadge } from './primitives'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,11 @@ export function EntityDetail({ beoId, onClose, onOpenCoherence }: {
   const history = useQuery({
     queryKey: ['signal-history', beoId],
     queryFn: () => fetchJSON<SignalHistoryResponse>(`/api/signals/history?entityId=${beoId}&limit=60`),
+  })
+  const detail = useQuery({
+    queryKey: ['entity-detail', beoId],
+    queryFn: () => fetchJSON<EntityDetailResponse>(`/api/entities/${beoId}`),
+    staleTime: 60000,
   })
 
   const summary = entity.data?.entities.find(e => e.beoId === beoId)
@@ -170,6 +176,73 @@ export function EntityDetail({ beoId, onClose, onOpenCoherence }: {
             </div>
           )}
 
+          {/* Event mix + chain span */}
+          {detail.data && (
+            <div className="grid gap-3">
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Event signature
+                  </span>
+                  <span className="text-[10px] text-zinc-600">
+                    {detail.data.stats.totalHashes} BHs · top {detail.data.eventMix.slice(0, 3).map(e => e.type).join(' / ')}
+                  </span>
+                </div>
+                {/* stacked bar */}
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
+                  {detail.data.eventMix.slice(0, 6).map((e, i) => (
+                    <div key={e.type} className="h-full"
+                      style={{
+                        width: `${e.pct * 100}%`,
+                        background: ['#10b981', '#fbbf24', '#38bdf8', '#a78bfa', '#f43f5e', '#71717a'][i],
+                      }}
+                      title={`${e.type}: ${e.count}`} />
+                  ))}
+                </div>
+                <div className="mt-2 space-y-1">
+                  {detail.data.eventMix.slice(0, 6).map((e, i) => (
+                    <div key={e.type} className="flex items-center gap-2 text-[11px]">
+                      <span className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: ['#10b981', '#fbbf24', '#38bdf8', '#a78bfa', '#f43f5e', '#71717a'][i] }} />
+                      <span className="flex-1 text-zinc-400">{e.type.replace(/_/g, ' ').toLowerCase()}</span>
+                      <span className="tabular font-mono text-zinc-500">{e.count}</span>
+                      <span className="tabular w-10 text-right font-mono text-zinc-600">{(e.pct * 100).toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Chain span
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {detail.data.chainSpan.map(c => (
+                    <span key={c.chainId}
+                      className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[10px]"
+                      title={`${c.count} BHs (${(c.pct * 100).toFixed(0)}%)`}>
+                      <span className="font-mono text-emerald-400/80">{c.vm}</span>
+                      <span className="text-zinc-300">{c.name}</span>
+                      <span className="tabular font-mono text-zinc-600">{c.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    48h activity
+                  </span>
+                  <span className="tabular font-mono text-[10px] text-zinc-600">
+                    peak {Math.max(...detail.data.activitySeries)}/h
+                  </span>
+                </div>
+                <Sparkline values={detail.data.activitySeries} width={340} height={40} />
+              </div>
+            </div>
+          )}
+
           {/* Entity facts */}
           {summary && (
             <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
@@ -191,7 +264,14 @@ export function EntityDetail({ beoId, onClose, onOpenCoherence }: {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-zinc-500">Chains spanned</dt>
-                  <dd className="tabular font-mono text-zinc-300">{summary.chains.length}</dd>
+                  <dd className="tabular font-mono text-zinc-300">{detail.data?.stats.chainsSpanned ?? summary.chains.length}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-zinc-500">Signals emitted</dt>
+                  <dd className="tabular font-mono text-emerald-400">
+                    {detail.data?.stats.emitted ?? '—'}
+                    <span className="text-zinc-600"> / {detail.data?.stats.signals ?? '—'}</span>
+                  </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-zinc-500">Primary address</dt>

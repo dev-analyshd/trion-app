@@ -4,7 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON, fmtInt, type BtcpIntentsResponse } from '@/lib/trion/client'
-import { FormulaBlock, StatTile, Panel, MeterBar, LiveBadge, SkeletonGrid } from './primitives'
+import { FormulaBlock, StatTile, Panel, MeterBar, LiveBadge, SkeletonGrid, Sparkline } from './primitives'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +40,16 @@ export function BtcpAnalytics() {
     byType.set(t, agg)
   }
   const typeStats = Array.from(byType.entries()).sort((a, b) => b[1].count - a[1].count)
+  // Routes-over-time: 12 buckets of 2h each (24h window)
+  const nowMs = Date.now()
+  const BUCKETS = 12
+  const bucketMs = 2 * 3600_000
+  const timeSeries = new Array(BUCKETS).fill(0)
+  for (const r of routes) {
+    const bucket = Math.floor((nowMs - new Date(r.createdAt).getTime()) / bucketMs)
+    if (bucket >= 0 && bucket < BUCKETS) timeSeries[BUCKETS - 1 - bucket]++
+  }
+
   const totalRoutes = routes.length
   const completed = routes.filter(r => r.status === 'FINALIZED').length
   const avgSaved = totalRoutes > 0
@@ -73,6 +83,19 @@ export function BtcpAnalytics() {
               <div className="tabular font-mono text-xl font-bold text-zinc-100">${fmtInt(totalValue)}</div>
               <div className="text-[10px] uppercase text-zinc-500">value routed</div>
             </div>
+          </div>
+
+          {/* routes over time */}
+          <div>
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                Routes over time — last 24h (2h buckets)
+              </span>
+              <span className="tabular font-mono text-[10px] text-zinc-600">
+                peak {Math.max(...timeSeries)}/bucket
+              </span>
+            </div>
+            <Sparkline values={timeSeries} width={520} height={48} />
           </div>
 
           {/* frequency bars */}

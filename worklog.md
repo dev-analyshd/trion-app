@@ -419,3 +419,28 @@ Environment STABLE (8th consecutive round). App: 1,600 BHs, 228 signals, 8 BTCP 
 ## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
 1. Dev-mode Fast Refresh occasionally surfaces stale build errors until a full reload — remember to hard-reload after hot edits that touch imports
 2. **Next round priorities**: (a) per-entity event-mix mini-bars in entity drill-down, (b) BTCP analytics date-bucket sparkline (routes over time), (c) print/export archetype cards, (d) consider moving seeded BTCP intent ages relative to now at boot
+
+---
+Task ID: CRON-R9 (webDevReview round 9 — entity drill-down enrichment + routes timeline)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; enriched entity drill-down (event mix + chain span + activity), routes-over-time sparkline
+
+## CURRENT PROJECT STATUS
+Environment STABLE (9th consecutive round). App: 1,600 BHs, 228 signals, 8 BTCP intents, 101 chains, 5/6 RPC probes, lint clean, 0 console errors.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Entity detail API** (`/api/entities/[beoId]`):
+   - Full BEO profile: event-mix (named types + counts + pct), chain span (chain names + VM + per-chain BH counts), magnitude distribution (10 buckets), 48h hourly activity series, signal stats (emitted/silenced/silence-rate/first-seen/last-hash)
+2. **FEATURE — Entity drill-down enrichment** (entity-detail.tsx):
+   - New sections: "Event signature" (stacked color bar + top-6 legend with counts/pcts), "Chain span" (VM-tagged chips with per-chain BH counts), "48h activity" sparkline with peak/h readout
+   - BEO profile facts now show live chains-spanned + signals-emitted counters from the API
+   - Verified in browser: CHAIN-SPAN-OK + event-mix true + 48h true + Signals emitted true
+3. **FEATURE — Routes-over-time sparkline** (btcp-analytics.tsx):
+   - 12×2h-bucket route-creation timeline (24h window) with peak/bucket readout, placed between stats grid and frequency bars
+   - Verified: analytics panel contains the sparkline SVG + "over time" label
+4. QA: all 10 views clean (0 console errors); 17 mobile buttons; lint clean; snapshot refreshed (147 files)
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Stale-HMR artifacts again delayed verification until hard reload — always reload after import-touching edits before QA
+2. **Next round priorities**: (a) magnitude-distribution histogram render in drill-down (data already in API), (b) BTCP escrow state timeline visualization, (c) entity comparison mode (pick 2 entities side-by-side), (d) performance: bh stream + heartbeat + donut now all poll — consider staggering intervals
