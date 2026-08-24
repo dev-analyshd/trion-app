@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BtcpAnalytics } from './btcp-analytics'
+import { EscrowTimeline, type EscrowTimelineData } from './escrow-timeline'
 import { Zap, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -409,9 +410,14 @@ export function BtcpView() {
                     {i.routes[0] ? `${i.routes[0].gasSavedPct.toFixed(0)}%` : '—'}
                   </td>
                   <td className="px-3 py-2">
-                    <span className={cn('text-xs', statusColor(i.routes[0]?.escrow?.state ?? ''))}>
-                      {i.routes[0]?.escrow?.state ?? '—'}
-                    </span>
+                    {i.routes[0]?.escrow ? (
+                      <EscrowTimeline
+                        state={i.routes[0].escrow.state}
+                        timeline={i.routes[0].escrow.timeline as EscrowTimelineData}
+                      />
+                    ) : (
+                      <span className="text-xs text-zinc-600">—</span>
+                    )}
                   </td>
                   <td className={cn('px-3 py-2 text-xs', statusColor(i.status))}>{i.status}</td>
                 </tr>

@@ -240,6 +240,36 @@ export function EntityDetail({ beoId, onClose, onOpenCoherence }: {
                 </div>
                 <Sparkline values={detail.data.activitySeries} width={340} height={40} />
               </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Magnitude distribution
+                  </span>
+                  <span className="text-[10px] text-zinc-600">log₁₀-normalized, 10 buckets</span>
+                </div>
+                <div className="flex h-16 items-end gap-1">
+                  {detail.data.magnitudeBuckets.map((count, i) => {
+                    const maxCount = Math.max(...detail.data.magnitudeBuckets, 1)
+                    const height = (count / maxCount) * 100
+                    return (
+                      <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                        <div
+                          className="w-full rounded-t-sm bg-emerald-500/70 transition-all hover:bg-emerald-400"
+                          style={{ height: `${Math.max(height, count > 0 ? 6 : 0)}%` }}
+                          title={`bucket ${i}: ${count} BHs`}
+                        />
+                        <span className="tabular text-[8px] text-zinc-600">{i}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-1 flex justify-between text-[9px] text-zinc-600">
+                  <span>0.0 (dust)</span>
+                  <span>0.5</span>
+                  <span>1.0 (max)</span>
+                </div>
+              </div>
             </div>
           )}
 

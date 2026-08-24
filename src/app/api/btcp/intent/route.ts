@@ -178,7 +178,7 @@ export async function POST(req: Request) {
   }
 }
 
-/** GET — list intents with routes and escrows. */
+/** GET — list intents with routes, escrows, and state timelines. */
 export async function GET() {
   const intents = await db.btcpIntent.findMany({
     orderBy: { createdAt: 'desc' }, take: 50,
@@ -197,7 +197,17 @@ export async function GET() {
       routes: i.routes.map(r => ({
         routeId: r.routeId, type: r.routeType, btcpScore: r.btcpScore,
         gasSavedPct: r.gasSavedPct, status: r.status,
-        escrow: r.escrow ? { escrowId: r.escrow.escrowId, state: r.escrow.state, amountUsd: r.escrow.amountUsd } : null,
+        escrow: r.escrow ? {
+          escrowId: r.escrow.escrowId, state: r.escrow.state, amountUsd: r.escrow.amountUsd,
+          timeline: {
+            lockedAt: r.escrow.createdAt.toISOString(),
+            resolvedAt: r.escrow.resolvedAt?.toISOString() ?? null,
+            durationMin: r.escrow.resolvedAt
+              ? Math.round((r.escrow.resolvedAt.getTime() - r.escrow.createdAt.getTime()) / 60000)
+              : Math.round((Date.now() - r.escrow.createdAt.getTime()) / 60000),
+            coherenceAtRelease: r.escrow.coherenceAtRelease,
+          },
+        } : null,
       })),
     })),
   })

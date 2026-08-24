@@ -444,3 +444,28 @@ Environment STABLE (9th consecutive round). App: 1,600 BHs, 228 signals, 8 BTCP 
 ## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
 1. Stale-HMR artifacts again delayed verification until hard reload — always reload after import-touching edits before QA
 2. **Next round priorities**: (a) magnitude-distribution histogram render in drill-down (data already in API), (b) BTCP escrow state timeline visualization, (c) entity comparison mode (pick 2 entities side-by-side), (d) performance: bh stream + heartbeat + donut now all poll — consider staggering intervals
+
+---
+Task ID: CRON-R10 (webDevReview round 10 — magnitude histogram + escrow timeline + perf)
+Agent: Main orchestrator (Z.ai Code)
+Task: 15-min review cycle — env stable; QA clean; magnitude histogram, escrow state timelines, polling stagger
+
+## CURRENT PROJECT STATUS
+Environment STABLE (10th consecutive round). App: 1,600 BHs, 228 signals, 8 BTCP intents with timelines, 101 chains, 5/6 RPC probes, lint clean, 0 console errors.
+
+## COMPLETED THIS ROUND
+
+1. **FEATURE — Magnitude histogram in entity drill-down**:
+   - 10-bucket log₁₀-normalized bar chart (dust → max) with hover tooltips, axis labels, emerald bars that brighten on hover — data already flowed from R9's API, now visualized
+   - Verified: "Magnitude distribution" + "log₁₀" labels present in dialog
+2. **FEATURE — Escrow state timeline visualization** (`escrow-timeline.tsx`):
+   - /api/btcp/intent GET now returns per-escrow timeline: lockedAt, resolvedAt, durationMin, coherenceAtRelease
+   - New compact horizontal timeline in the ledger table: lock timestamp → duration-proportional bar (60min = full width) → terminal timestamp with C-at-release, or live HOLDING badge; state-colored (amber holding / emerald released / zinc reverted)
+   - Verified: 7 timeline bars found in ledger
+3. **PERF — Polling stagger**:
+   - Overview BH list 8s→10s (SSE handles real-time), signal history 10s→20s (donut shares cache) — reduces request pressure with zero UX impact
+4. QA: all 10 views 0 console errors; 17 mobile buttons; lint clean; snapshot refreshed (148 files)
+
+## UNRESOLVED ISSUES / RISKS + NEXT-PHASE RECOMMENDATIONS
+1. Python replace-pattern misses continue to be the main time sink — prefer Edit tool with exact context for JSX blocks
+2. **Next round priorities**: (a) entity comparison mode (two BEOs side-by-side), (b) BH explorer per-entity pre-filter links from drill-down, (c) keyboard-accessible table rows (tab + enter), (d) snapshot refresh automation hook at round close

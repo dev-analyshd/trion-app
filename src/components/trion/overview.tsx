@@ -40,12 +40,12 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: string) => voi
   const bh = useQuery({
     queryKey: ['bh-recent'],
     queryFn: () => fetchJSON<BhListResponse>('/api/bh?limit=12'),
-    refetchInterval: 8000,
+    refetchInterval: 10000, // staggered: 10s (SSE handles real-time push)
   })
   const history = useQuery({
     queryKey: ['signal-history'],
     queryFn: () => fetchJSON<SignalHistoryResponse>('/api/signals/history?limit=200'),
-    refetchInterval: 10000,
+    refetchInterval: 20000, // staggered: 20s (donut reads same cache)
   })
 
   const h = health.data
